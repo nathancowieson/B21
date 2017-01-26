@@ -11,6 +11,7 @@ import os
 from datetime import datetime
 import sys
 import getpass
+import paramiko
 import subprocess
 from glob import glob
 from shutil import copyfile
@@ -230,16 +231,60 @@ class UserSetup(object):
             self.logger.info('JSON template points to: '+self.output_pipeline_file)
 
     def MakeHplcSymLink(self):
+        #Set some parameters
+        user = 'b21user'
+        host = 'localhost'
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         target_dir = '/dls/b21/data/2017/cm16775-1/processing/hplc_forwarding_link'
         source_dir = self.visit_directory+'hplc/saxs'
-        self.logger.info('Making symlink pointing to: '+source_dir)
-        try:
-            if os.path.islink(target_dir):
-                os.unlink(target_dir)
-            os.symlink(source_dir, target_dir)
-        except:
-            self.logger.error('Failed to make the HPLC symlink, prob a permissions issue')
-        #os.chmod(target_dir, int("{0:o}".format(777)))#need to chmod here so next user can unlink. os.chmod takes the number as an octal
+
+        #If you are already b21user you can go ahead directly
+        if getpass.getuser() == user:
+            self.logger.info('Making symlink pointing to: '+source_dir)
+            try:
+                if os.path.islink(target_dir):
+                    os.unlink(target_dir)
+                os.symlink(source_dir, target_dir)
+            except:
+                self.logger.error('Failed to make the HPLC symlink, prob a permissions issue')
+        #If you are not b21user you need to switch
+        else:
+            self.logger.info('To create the HPLC link we switch to b21user')
+
+            #Give three chances to get the password right
+            tries = 0
+            success = False
+            while not success and tries < 3:
+                mypass = getpass.getpass('Enter b21user password: ')
+                try:
+                    client.connect(host, username=user, password=mypass)
+                    success = True
+                except:
+                    self.logger.error('Failed to login as b21user, prob wrong password, try again')
+                    tries += 1
+
+
+            if success:
+                self.logger.info('Unlinking the old dir')
+                command = 'unlink '+target_dir
+                chan = client.get_transport().open_session()
+                chan.exec_command(command)
+                if chan.recv_exit_status() == 0:
+                    self.logger.info('Successfully unlinked the old directory.')
+                else:
+                    self.logger.error('Failed to unlink the old dir, will try to link the new one anyway.')
+                self.logger.info('Linking the new directory')
+                command = 'ln -s '+source_dir+' '+target_dir
+                chan = client.get_transport().open_session()
+                chan.exec_command(command)
+                if chan.recv_exit_status() == 0:
+                    self.logger.info('Linked the new directory')
+                else:
+                    self.logger.error('Failed to link the new directory, you will have to do this manually')
+            else:
+                self.logger.error('Failed to login as b21user after three tries, you will have to make the HPLC link manually')
+                    
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
