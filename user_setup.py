@@ -51,9 +51,6 @@ class UserSetup(object):
         streamhandler = logging.StreamHandler()
         streamhandler.setFormatter(formatter)
         self.logger.addHandler(streamhandler)
-
-        ###connect to epics
-        self.chid = ca.create_channel('BL21B-EA-EXPT-01:ID', connect=True)
            
     def SetVisit(self, visit):
         if str(visit) in os.listdir(self.visit_directory):
@@ -67,10 +64,36 @@ class UserSetup(object):
             users_experiments = child.communicate()[0].split()[1:]
             exit_status = child.returncode
             if 'b21_staff' in users_experiments or self.username in users_experiments:
-                ca.put(self.chid, self.visit_id)
                 self.logger.info('Current user has permissions on this visit')
-                return True
+                try:
+                    ###connect to epics
+                    self.chid = ca.create_channel('BL21B-EA-EXPT-01:ID', connect=True)
+                    ca.put(self.chid, self.visit_id)
+                    self.logger.info('Set the new visit in epics for the autoprocessing to pick up')
+                    return True
+                except:
+                    self.logger.error('Epics is not on the path, will try accessing explicitly')
+                    try:
+                        my_env = os.environ.copy()
+                        epics_path = '/dls_sw/epics/R3.14.12.3/base/bin/linux-x86_64'
+                        my_env["PATH"] = epics_path + ':'+ my_env["PATH"]
+                        child = subprocess.Popen(['caput', 'BL21B-EA-EXPT-01:ID', self.visit_id], env=my_env, stderr=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=1)
+                        epics_output = child.communicate()
+                        epics_status = child.returncode
+                        if epics_status == 0:
+                            self.logger.info('Successfully put visit ID to epics via command line')
+                            return True
+                        else:
+                            self.logger.error('Failed to put visit ID to epics, the processing pypline will not work')
+                            self.logger.error('To fix this open a terminal window on another workstation and run the command: caput BL21B-EA-EXPT-01:ID '+self.visit_id)
+                            return False
+                    except:
+                        self.logger.error('Failed to put visit ID to epics, the processing pypline will not work')
+                        self.logger.error('To fix this open a terminal window on another workstation and run the command: caput BL21B-EA-EXPT-01:ID '+self.visit_id)
+                        return False
+
             else:
+                self.logger.error('Current user has no permissions on this visit')
                 return False
         else:
             self.logger.error(str(visit)+' was not found in the filesystem')
