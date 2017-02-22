@@ -105,6 +105,7 @@ class UserSetup(object):
             if not os.path.isfile(self.home_directory+'Desktop/'+os.path.split(launcher)[-1]):
                 self.logger.info('copied '+os.path.split(launcher)[-1]+' to desktop')
                 copyfile(launcher, self.home_directory+'Desktop/'+os.path.split(launcher)[-1])
+                os.chmod(self.home_directory+'Desktop/'+os.path.split(launcher)[-1], int('755', 8))
             else:
                 self.logger.info(os.path.split(launcher)[-1]+' is already on desktop')  
 
