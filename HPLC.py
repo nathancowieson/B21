@@ -51,7 +51,7 @@ class HPLC(object):
         
     def setupTfg(self, frames, readout_time, tpf):
         self.tfg.clearFrameSets()
-        self.tfg.addFrameSet(frames, readout_time * 1000, tpf * 1000, 0, 251, 0, 0)
+        self.tfg.addFrameSet(frames, readout_time * 1000, tpf * 1000, int('00100000', 2), int('11111111', 2), 0, 0)
         self.tfg.loadFrameSets()
         return frames * (tpf + readout_time)
     
@@ -155,8 +155,9 @@ class HPLC(object):
                 self.logger.error('The HPLC static/flow valve is in static position, this may be caused by a loss of vacuum in the sample section.')
                 raise EnvironmentError('The script terminated early because the HPLC static/flow valve is in the static position')
             
-            if not self.getFastShutter():
-                self.setFastShutter('Open')
+            if self.getFastShutter():
+                self.logger.info('Fast shutter was open, closing it so the tfg can take care of it during collection')
+                self.setFastShutter('Close')
                 
             self.setEnvironment('HPLC')
             self.setSampleType('sample+buffer')
@@ -199,7 +200,6 @@ class HPLC(object):
                 self.logger.info('Starting collection of '+str(number_of_images)+'x'+str(exposure_time)+' second exposures')
                 StaticScan([self.ncddetectors]).run()
                 self.logger.info('Finished collecting '+b.getSampleName())
-            self.setFastShutter('Close')
             self.setSafetyShutter('Close')
             self.logger.info('SCRIPT FINISHED NORMALLY')
             #namespace:
