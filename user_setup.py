@@ -154,7 +154,7 @@ class UserSetup(object):
             return False
 
 
-    def WriteProcessingPipeline(self, output_file = None, low_q = 0.004, high_q = 0.442, abs_cal = None):
+    def WriteProcessingPipeline(self, output_file = None, low_q = None, high_q = None, abs_cal = None):
         #GET PIPELINE OUTPUT NAME, SET DEFAULT IF NONE
         if output_file == None:
             output_file = self.visit_directory+'processing/processing_pipeline_'+datetime.now().strftime('%d%m%y')+'.nxs'
@@ -170,13 +170,20 @@ class UserSetup(object):
                 output_file = self.visit_directory+'processing/processing_pipeline_'+datetime.now().strftime('%d%m%y')+'.nxs'
                 self.logger.error('Error setting pipeline output file name, will write to default')
         #SET LOW AND HIGH Q LIMITS AND SET TO DEFAULT IF FORMAT WRONG
-        try:
-            low_q = float(low_q)
-            high_q = float(high_q)
-        except:
-            low_q = 0.004
-            high_q = 0.442
-            self.logger.error('low_q and high_q need to be of type: float, will ignore user input and use defaults')
+        if not low_q == None:
+            try:
+                low_q = float(low_q)
+            except:
+                low_q = None
+                self.logger.error('low_q needs to be of type: float, will ignore user input')
+
+        if not high_q == None:
+            try:
+                high_q = float(high_q)
+            except:
+                high_q = None
+                self.logger.error('high_q needs to be of type: float, will ignore user input')
+
 
         #SET ABSOLUTE CALIBRATION MULTIPLIER
         if not abs_cal == None:
@@ -211,6 +218,10 @@ class UserSetup(object):
                         self.logger.info('Using detector mask file: '+json.loads(item[1].data.nxdata)['filePath'])
                 elif item[1].name.nxdata == u'Azimuthal Integration':
                     mydata = json.loads(item[1].data.nxdata)
+                    if low_q == None:
+                        low_q = mydata['radialRange'][0]
+                    if high_q == None:
+                        high_q = mydata['radialRange'][1]
                     mydata['radialRange'] = [low_q, high_q]
                     item[1].data.nxdata = unicode(json.dumps(mydata), 'utf-8')
                 elif item[1].name.nxdata == u'Multiply by Scalar':
@@ -318,8 +329,8 @@ if __name__ == '__main__':
     required = OptionGroup(parser, "Required Arguments")
     optional = OptionGroup(parser, "Optional Arguments")
     required.add_option("-v", "--visit_id", action="store", type="string", dest="visit_id", default="None", help="The visit ID of the experiment i.e. mx9537-84. If none is given will attempt to retrieve visit ID from database.")
-    optional.add_option("-n", "--q_min", action="store", type="float", dest="lo_q", default=0.004, help="Set the low Q limit for the radial integration")
-    optional.add_option("-x", "--q_max", action="store", type="float", dest="hi_q", default=0.442, help="Set the high Q limit for the radial integration")
+    optional.add_option("-n", "--q_min", action="store", type="float", dest="lo_q", default=None, help="Set the low Q limit for the radial integration")
+    optional.add_option("-x", "--q_max", action="store", type="float", dest="hi_q", default=None, help="Set the high Q limit for the radial integration")
     optional.add_option("-a", "--abs_cal", action="store", type="float", dest="abs_cal", default=None, help="Multiplier for setting absolute calibration, default is to leave it as is.")
     optional.add_option("-o", "--output_file", action="store", type="string", dest="output_file", default=None, help="The location of the pipeline nxs output file. The default is into current visit processing dir with name processing_pipeline_<todays date>.nxs ")
 
