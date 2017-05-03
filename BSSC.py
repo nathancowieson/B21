@@ -8,11 +8,14 @@ import gda.jython.commands.ScannableCommands
 from gda.jython import InterfaceProvider
 from gda.commandqueue import JythonScriptProgressProvider
 from gda.jython.commands.GeneralCommands import pause
+from tfgsetup import fs
+from cStringIO import StringIO
 
 SAMPLE_HOLD = True
 
 class BSSCRun:
     def __init__(self, beanFile):
+        self.__version__ = '1.00'
         finder = gda.factory.Finder.getInstance()
         find = finder.find
         self.holdsample = SAMPLE_HOLD
@@ -49,6 +52,27 @@ class BSSCRun:
 
         currentVisit = GDAMetadataProvider.getInstance().getMetadataValue("visit")
         self.totalSteps = self.overheadsteps + self.bean.getMeasurements().size() * self.stepspersample
+
+    def getFastShutter(self):
+        old_stdout = sys.stdout
+        sys.stdout = mystdout = StringIO()
+        fs()
+        sys.stdout = old_stdout
+        if mystdout.getvalue() == 'fs: Open\n':
+            self.reportProgress('Fast shutter is open')
+            return True
+        else:
+            self.reportProgress('Fast shutter is closed')
+            return False
+
+    def setFastShutter(self, command='Open'):
+        if command in ['Open', 'Close']:
+            self.reportProgress('Setting fast shutter to '+command)
+            fs(command)
+            
+        else:
+            self.reportProgress('setFastValve function requires either Close or Open as input')
+
 
     def setHoldSample(self, holdsample):
         if type(holdsample) == type(True):
@@ -105,7 +129,7 @@ class BSSCRun:
 
     def setupTfg(self, frames, tpf):
         self.tfg.clearFrameSets()
-        self.tfg.addFrameSet(frames, 50, tpf * 1000, 0, 251, 0, 0);
+        self.tfg.addFrameSet(frames, 50, tpf * 1000, int('00000100', 2), int('11111111', 2), 0, 0);
         self.tfg.loadFrameSets()
         return frames * (tpf + 0.05)
 
@@ -177,8 +201,11 @@ class BSSCRun:
         return self.setupTfg(titration.getFrames(), titration.getTimePerFrame())
 
     def run(self, processing=True):
+        self.reportProgress('Running BSSC script version '+self.__version__)
         self.reportProgress("Initialising");
         self.checkDevice()
+        if self.getFastShutter():
+            self.setFastShutter('Close')
         self.bssc.setSampleType("green")
         self.reportProgress("Opening Shutter")
         self.openShutter()
