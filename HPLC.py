@@ -51,7 +51,7 @@ class HPLC(object):
         
     def setupTfg(self, frames, readout_time, tpf):
         self.tfg.clearFrameSets()
-        self.tfg.addFrameSet(frames, readout_time * 1000, tpf * 1000, int('00100000', 2), int('11111111', 2), 0, 0)
+        self.tfg.addFrameSet(frames, readout_time * 1000, tpf * 1000, int('00000100', 2), int('11111111', 2), 0, 0)#note, byte order is reversed!
         self.tfg.loadFrameSets()
         return frames * (tpf + readout_time)
     
