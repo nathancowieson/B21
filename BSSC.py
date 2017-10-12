@@ -16,11 +16,11 @@ SAMPLE_HOLD = True
 
 class BSSCRun:
     def __init__(self, beanFile):
-        self.__version__ = '1.00'
+        self.__version__ = '1.01'
         finder = gda.factory.Finder.getInstance()
         find = finder.find
         self.holdsample = SAMPLE_HOLD
-        self.samplevolume = 20
+        self.samplevolume = 35
         self.beanFile = beanFile
         self.bean = BSSCSessionBean.createFromXML(beanFile)
         self.bssc = finder.listAllLocalObjects("uk.ac.gda.devices.bssc.BioSAXSSampleChanger")[0]
@@ -157,15 +157,16 @@ class BSSCRun:
         scan.runScan()
         return scan.getDataWriter().getCurrentFileName()
 
-    def expose(self, duration):
-        speed = self.samplevolume / duration
-        if speed >= 5 and speed <= 6000:
-            # simulation reports these limits
-            taskid = self.bssc.push(self.samplevolume, speed)
+    def expose(self, duration, move=False):
+        if move:
+            print "Moving the sample during collection"
+            speed = 1
+            push_volume = self.samplevolume-10
+            taskid = self.bssc.push(self.samplevolume-10, 1)
             filename = self.doTheScan(self.scannables)
             self.monitorAsynchronousMethod(taskid)
         else:
-            print "sample speed %5.1f outside allowed range, will do static exposure" % speed
+            print "Sample static during collection"
             filename = self.doTheScan(self.scannables)
         return filename
 
@@ -189,12 +190,16 @@ class BSSCRun:
                 self.reportProgress("Sample position feedback is off.")
             self.reportProgress("Exposing Sample")
 
-            self.setTitle("Sample: %s (Location %s)" % (titration.getSampleName(), titration.getLocation().toString()))
+            #self.setTitle("Sample: %s (Location %s)" % (titration.getSampleName(), titration.getLocation().toString()))
+            self.setTitle(titration.getSampleName())
 
             self.sampleName.setValue(titration.getSampleName())
             self.sampleConcentration.asynchronousMoveTo(titration.getConcentration())
-
-            filename = self.expose(duration)
+            if titration.getKey() == "move":
+                move = True
+            else:
+                move = False
+            filename = self.expose(duration, move)
             pause()
 
             if titration.getRecouperateLocation() is not None:
