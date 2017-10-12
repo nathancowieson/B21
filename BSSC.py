@@ -10,6 +10,7 @@ from gda.commandqueue import JythonScriptProgressProvider
 from gda.jython.commands.GeneralCommands import pause
 from tfgsetup import fs
 from cStringIO import StringIO
+from gdascripts.pd.epics_pds import DisplayEpicsPVClass, SingleEpicsPositionerClass
 
 SAMPLE_HOLD = True
 
@@ -73,6 +74,14 @@ class BSSCRun:
         else:
             self.reportProgress('setFastValve function requires either Close or Open as input')
 
+    def armFastValve(self):
+        try:
+            fv1.getPosition()
+        except:
+            fv1 = SingleEpicsPositionerClass('fv1', 'BL21B-VA-FVALV-01:CON', 'BL21B-VA-FVALV-01:STA', 'BL21B-VA-FVALV-01:STA', 'BL21B-VA-FVALV-01:CON', 'mm', '%d')
+        if not fv1.getPosition() == 3.0:
+            fv1(3.0)
+
 
     def setHoldSample(self, holdsample):
         if type(holdsample) == type(True):
@@ -129,7 +138,8 @@ class BSSCRun:
 
     def setupTfg(self, frames, tpf):
         self.tfg.clearFrameSets()
-        self.tfg.addFrameSet(frames, 50, tpf * 1000, int('00000100', 2), int('11111111', 2), 0, 0);
+        # Dead time needs to be >=100 to allow for the 'fast' shutter to open fully before exposure
+        self.tfg.addFrameSet(frames, 100, tpf * 1000, int('00000100', 2), int('11111111', 2), 0, 0);
         self.tfg.loadFrameSets()
         return frames * (tpf + 0.05)
 
@@ -208,6 +218,7 @@ class BSSCRun:
             self.setFastShutter('Close')
         self.bssc.setSampleType("green")
         self.reportProgress("Opening Shutter")
+        self.armFastValve()
         self.openShutter()
         self.sample_environment('BSSC')
         for titration in self.bean.getMeasurements():
