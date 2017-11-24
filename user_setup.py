@@ -200,39 +200,42 @@ class UserSetup(object):
             mynxs = nx.tree.NXFile(output_file, 'rw')
             tree = mynxs.readfile()
             for item in tree.entry.process._entries.iteritems():
-                if item[1].name.nxdata == u'Export to Text File':
-                    mydata = json.loads(item[1].data.nxdata)
-                    mydata['outputDirectoryPath'] = self.visit_directory+'processed'
-                    item[1].data.nxdata = unicode(json.dumps(mydata), 'utf-8')
-                elif item[1].name.nxdata == u'Import Detector Calibration':
-                    calibration_file = self.WriteCalibrationFile()
-                    if calibration_file:
-                        item[1].data.nxdata = unicode(json.dumps({"filePath":calibration_file}), 'utf-8')
-                        self.logger.info('Using detector calibration file: '+json.loads(item[1].data.nxdata)['filePath'])
-                    else:
-                        self.logger.error('Unable to set the calibration file in pipeline nxs')
-                elif item[1].name.nxdata == u'Import Mask From File':
-                    mask_file = self.WriteMaskFile()
-                    if mask_file:
-                        item[1].data.nxdata = unicode(json.dumps({"filePath":mask_file}), 'utf-8')
-                        self.logger.info('Using detector mask file: '+json.loads(item[1].data.nxdata)['filePath'])
-                elif item[1].name.nxdata == u'Azimuthal Integration':
-                    mydata = json.loads(item[1].data.nxdata)
-                    if low_q == None:
-                        low_q = mydata['radialRange'][0]
-                    if high_q == None:
-                        high_q = mydata['radialRange'][1]
-                    mydata['radialRange'] = [low_q, high_q]
-                    item[1].data.nxdata = unicode(json.dumps(mydata), 'utf-8')
-                elif item[1].name.nxdata == u'Multiply by Scalar':
-                    if not abs_cal == None:
+                try:
+                    if item[1].name.nxdata == u'Export to Text File':
                         mydata = json.loads(item[1].data.nxdata)
-                        mydata['value'] = abs_cal
+                        mydata['outputDirectoryPath'] = self.visit_directory+'processed'
                         item[1].data.nxdata = unicode(json.dumps(mydata), 'utf-8')
+                    elif item[1].name.nxdata == u'Import Detector Calibration':
+                        calibration_file = self.WriteCalibrationFile()
+                        if calibration_file:
+                            item[1].data.nxdata = unicode(json.dumps({"filePath":calibration_file}), 'utf-8')
+                            self.logger.info('Using detector calibration file: '+json.loads(item[1].data.nxdata)['filePath'])
+                        else:
+                            self.logger.error('Unable to set the calibration file in pipeline nxs')
+                    elif item[1].name.nxdata == u'Import Mask From File':
+                        mask_file = self.WriteMaskFile()
+                        if mask_file:
+                            item[1].data.nxdata = unicode(json.dumps({"filePath":mask_file}), 'utf-8')
+                            self.logger.info('Using detector mask file: '+json.loads(item[1].data.nxdata)['filePath'])
+                    elif item[1].name.nxdata == u'Azimuthal Integration':
+                        mydata = json.loads(item[1].data.nxdata)
+                        if low_q == None:
+                            low_q = mydata['radialRange'][0]
+                        if high_q == None:
+                            high_q = mydata['radialRange'][1]
+                        mydata['radialRange'] = [low_q, high_q]
+                        item[1].data.nxdata = unicode(json.dumps(mydata), 'utf-8')
+                    elif item[1].name.nxdata == u'Multiply by Scalar':
+                        if not abs_cal == None:
+                            mydata = json.loads(item[1].data.nxdata)
+                            mydata['value'] = abs_cal
+                            item[1].data.nxdata = unicode(json.dumps(mydata), 'utf-8')
+                        else:
+                            pass
+
                     else:
                         pass
-
-                else:
+                except:
                     pass
             self.output_pipeline_file = output_file
             self.logger.info('Set the output data directory in the pipeline file to: '+self.visit_directory+'processed')
@@ -271,12 +274,12 @@ class UserSetup(object):
         host = 'localhost'
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        target_dir = '/dls/b21/data/2017/cm16775-1/processing/hplc_forwarding_link'
+        target_dir = '/dls/b21/data/2017/cm16775-4/processing/hplc_forwarding_link'
         source_dir = self.visit_directory+'hplc/saxs'
 
         #If you are already b21user you can go ahead directly
         if getpass.getuser() == user:
-            self.logger.info('Making symlink pointing to: '+source_dir)
+            self.logger.info('Making symlink '+target_dir+': pointing to: '+source_dir)
             try:
                 if os.path.islink(target_dir):
                     os.unlink(target_dir)
