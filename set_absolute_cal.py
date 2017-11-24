@@ -28,8 +28,8 @@ class AbsCal(object):
         #set some parameters
         self.water = None
         self.empty = None
-        self.qmin = 0.37 # window for calculating
-        self.qmax = 0.39 # scattering
+        self.qmin = 0.34 # window for calculating
+        self.qmax = 0.36 # scattering
         self.target = 0.0163
         self.master_pipeline = '/dls_sw/b21/scripts/TEMPLATES/current_pipeline.nxs'
 
@@ -103,9 +103,12 @@ class AbsCal(object):
             mynxs = nx.tree.NXFile(self.master_pipeline, 'rw')
             tree = mynxs.readfile()
             for item in tree.entry.process._entries.iteritems():
-                if item[1].name.nxdata == u'Multiply by Scalar':
-                    mydata = json.loads(item[1].data.nxdata)
-                    return mydata['value']
+                try:
+                    if item[1].name.nxdata == u'Multiply by Scalar':
+                        mydata = json.loads(item[1].data.nxdata)
+                        return mydata['value']
+                except:
+                    pass
         else:
             self.logger.error('Could not return multiplier from current nxs pipeline')
 
@@ -115,11 +118,14 @@ class AbsCal(object):
             mynxs = nx.tree.NXFile(self.master_pipeline, 'rw')
             tree = mynxs.readfile()
             for item in tree.entry.process._entries.iteritems():
-                if item[1].name.nxdata == u'Multiply by Scalar':
-                    mydata = json.loads(item[1].data.nxdata)
-                    mydata['value'] = multiplier
-                    item[1].data.nxdata = unicode(json.dumps(mydata), 'utf-8')
-                else:
+                try:
+                    if item[1].name.nxdata == u'Multiply by Scalar':
+                        mydata = json.loads(item[1].data.nxdata)
+                        mydata['value'] = multiplier
+                        item[1].data.nxdata = unicode(json.dumps(mydata), 'utf-8')
+                    else:
+                        pass
+                except:
                     pass
         else:
             self.logger.error('Cannot get pipeline nxs file')
