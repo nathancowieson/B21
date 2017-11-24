@@ -5,7 +5,7 @@ Created on April 28th, 2017
 '''
 from uk.ac.gda.devices.hplc.beans import HplcSessionBean
 from gda.commandqueue import JythonScriptProgressProvider
-from gdascripts.pd.epics_pds import DisplayEpicsPVClass
+from gdascripts.pd.epics_pds import DisplayEpicsPVClass, SingleEpicsPositionerClass
 from gda.data.metadata import GDAMetadataProvider
 from gda.scan import StaticScan
 from tfgsetup import fs
@@ -69,7 +69,16 @@ class HPLC(object):
             self.environment(type)
         else:
             self.logger.error('Environment type should be one of: HPLC, BSSC, Manual.')
-            
+
+    def armFastValve(self):
+        try:
+            fv1.getPosition()
+        except:
+            fv1 = SingleEpicsPositionerClass('fv1', 'BL21B-VA-FVALV-01:CON', 'BL21B-VA-FVALV-01:STA', 'BL21B-VA-FVALV-01:STA', 'BL21B-VA-FVALV-01:CON', 'mm', '%d')
+        if not fv1.getPosition() == 3.0:
+            fv1(3.0)
+
+
     def getSearchStatus(self):
         try:
             eh_search_status.getPosition()
@@ -88,9 +97,9 @@ class HPLC(object):
             return False
 
     def setSafetyShutter(self, command='Open'):
-        levels = {'Open': 5, 'Close': 3}
-        if command in levels.keys():
-            self.shutter.setLevel(levels[command])
+        levels = ['Open', 'Close']
+        if command in levels:
+            self.shutter(command)
             self.logger.info('Setting safety shutter to '+command)
         else:
             self.logger.error("setSafetyShutter function requires either 'Open' or 'Close' as input")
@@ -146,6 +155,7 @@ class HPLC(object):
         try:
             if not self.getSafetyShutter():
                 if self.getSearchStatus():
+                    #self.armFastValve()
                     self.setSafetyShutter('Open')
                 else:
                     self.logger.error('Search the hutch you crazy fool!')
