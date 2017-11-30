@@ -18,6 +18,8 @@ from shutil import copyfile
 from nexusformat import nexus as nx#import nxload, nxsave
 import json
 from epics import ca
+sys.path.insert(0, '/dls/science/groups/b21/B21')
+from XlsToGda import xmlReadWrite
 
 class UserSetup(object):
     """Sets the currently logged in users directories for a visit
@@ -111,7 +113,7 @@ class UserSetup(object):
 
     def CopyScatter(self):
         scatter_in = self.template_dir+'scatter3.jar'
-        scatter_out = self.visit_directory+'/processing/scatter3.jar'
+        scatter_out = self.visit_directory+'processing/scatter3.jar'
         if os.path.isfile(scatter_in):
             if not os.path.isfile(scatter_out):
                 copyfile(scatter_in, scatter_out)
@@ -153,6 +155,19 @@ class UserSetup(object):
             self.logger.error("Calibration file: "+self.calibration_file+" does not exist")
             return False
 
+    def WriteDefaultXmlFiles(self):
+        biosaxs_outfile = self.visit_directory+'xml/default.biosaxs'
+        hplc_outfile = self.visit_directory+'xml/default.hplc'
+
+        default_biosaxs = [('measurement', [('location', [('plate', '2'), ('row', 'A'), ('column', '9')]), ('sampleName', 'my buffer'), ('concentration', '0.0'), ('viscosity', 'medium'), ('molecularWeight', '0.0'), ('buffer', 'true'), ('buffers', ''), ('yellowSample', 'true'), ('timePerFrame', '0.5'), ('frames', '30'), ('exposureTemperature', '15.0'), ('key', 'None'), ('mode', 'BS'), ('visit', self.visit_id), ('username', 'b21user')]), ('measurement', [('location', [('plate', '1'), ('row', 'A'), ('column', '1')]), ('sampleName', 'my sample'), ('concentration', '1.0'), ('viscosity', 'medium'), ('molecularWeight', '66.0'), ('buffer', 'false'), ('buffers', '2a9'), ('yellowSample', 'true'), ('timePerFrame', '0.5'), ('frames', '30'), ('exposureTemperature', '15.0'), ('key', 'move'), ('mode', 'BS'), ('visit', self.visit_id), ('username', 'b21user')])]
+        default_hplc = [('measurement', [('location', [('plate', '1'), ('row', 'A'), ('column', '1')]), ('sampleName', 'my sample'), ('concentration', '5.0'), ('molecularWeight', '66.0'), ('timePerFrame', '1.0'), ('visit', self.visit_id), ('username', 'b21user'), ('comment', 'None'), ('buffers', '25 mM Tris pH 7.5, 200 mM NaCl'), ('mode', 'HPLC'), ('columnType', 'kw304'), ('duration', '30.0')])]
+        myxml = xmlReadWrite()
+        myxml.setOutputType('biosaxs')
+        open(biosaxs_outfile, 'w').write(myxml.parseToXml(default_biosaxs))
+        self.logger.info('Wrote default.biosaxs to xml directory')
+        myxml.setOutputType('hplc')
+        open(hplc_outfile, 'w').write(myxml.parseToXml(default_hplc))
+        self.logger.info('Wrote default.hplc to xml directory')        
 
     def WriteProcessingPipeline(self, output_file = None, low_q = None, high_q = None, abs_cal = None):
         #GET PIPELINE OUTPUT NAME, SET DEFAULT IF NONE
@@ -352,4 +367,5 @@ if __name__ == '__main__':
         job.WriteProcessingPipeline(output_file = options.output_file, low_q = options.lo_q, high_q = options.hi_q, abs_cal = options.abs_cal)
         job.WriteJsonTemplate()
         job.MakeHplcSymLink()
+        job.WriteDefaultXmlFiles()
         job.logger.info('Finished successfully')
