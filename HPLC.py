@@ -180,9 +180,9 @@ class HPLC(object):
                 
                 #GET THE RUN TIME
                 try:
-                    runtime = int(b.getComment())
+                    runtime = int(b.getTotalDuration())
                 except:
-                    self.logger.error('The run time of the experiment is set in the comment box, must be an integer and is in minutes, using 30 mins as a default')
+                    self.logger.error('The run time of the experiment must be an integer and is in minutes, using 30 mins as a default')
                     runtime = 30
                 number_of_images = int(ceil(runtime * 60.0 / ( readout_time + exposure_time)))
                 
