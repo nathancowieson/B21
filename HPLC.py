@@ -7,6 +7,8 @@ from uk.ac.gda.devices.hplc.beans import HplcSessionBean
 from gda.commandqueue import JythonScriptProgressProvider
 from gdascripts.pd.epics_pds import DisplayEpicsPVClass, SingleEpicsPositionerClass
 from gda.data.metadata import GDAMetadataProvider
+from gda.jython.commands.GeneralCommands import pause
+from gda.jython import JythonServerFacade
 from gda.scan import StaticScan
 from tfgsetup import fs
 from time import sleep
@@ -39,6 +41,7 @@ class HPLC(object):
         self.environment = find("sample_environment")
         self.tfg = finder.listAllLocalObjects("gda.device.Timer")[0]
         self.ncddetectors = finder.listAllLocalObjects("uk.ac.gda.server.ncd.detectorsystem.NcdDetectorSystem")[0]
+        self.jsf = JythonServerFacade.getInstance()
         #CREATE A LOGGER
         self.logger = logging.getLogger('HPLC')
         self.logger.setLevel(logging.INFO)
@@ -78,7 +81,16 @@ class HPLC(object):
         if not fv1.getPosition() == 3.0:
             fv1(3.0)
 
-
+    def getMachineStatus(self):
+        try:
+            machine_status.getPosition()
+        except:
+            machine_status=DisplayEpicsPVClass('beam_status', 'FE21B-PS-SHTR-01:STA', 'units', '%d')
+        if machine_status.getPosition() == 1.0:
+            return True
+        else:
+            return False
+        
     def getSearchStatus(self):
         try:
             eh_search_status.getPosition()
@@ -173,6 +185,10 @@ class HPLC(object):
             self.setSampleType('sample+buffer')
 
             for i, b in enumerate(self.bean.measurements):
+                if not self.getMachineStatus():
+                    self.logger.error('Paused script due to beam dump. Hit play to resume')
+                    self.jsf.pauseCurrentScript()
+                pause()
                 self.logger.info('---- STARTING RUN '+str(i)+' of '+str(len(self.bean.measurements))+': SAMPLE: '+b.getSampleName()+' ----')
                 readout_time = 0.1
                 exposure_time = b.getTimePerFrame()
