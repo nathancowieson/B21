@@ -81,7 +81,7 @@ class HPLC(object):
         if not fv1.getPosition() == 3.0:
             fv1(3.0)
     def sendSms(self, message=""):
-        fedids = {'Nathan': 'xaf46449', 'Nikul': 'rvv47355', 'Rob': 'xos81802'}
+        fedids = {'Nathan': 'xaf46449', 'Nikul': 'rvv47355', 'Rob': 'xos81802', 'Katsuaki': 'vdf31527'}
         for key in fedids.keys():
             subprocess.call(['/dls_sw/prod/tools/RHEL6-x86_64/defaults/bin/dls-sendsms.py', fedids[key], message])
 
