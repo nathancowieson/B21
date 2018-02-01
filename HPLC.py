@@ -18,7 +18,7 @@ import sys
 from cStringIO import StringIO
 from math import ceil
 from datetime import datetime
-
+import subprocess
 
 class HPLC(object):
     """Handles collection of HPLC SAXS data in GDA/Jython
@@ -80,6 +80,10 @@ class HPLC(object):
             fv1 = SingleEpicsPositionerClass('fv1', 'BL21B-VA-FVALV-01:CON', 'BL21B-VA-FVALV-01:STA', 'BL21B-VA-FVALV-01:STA', 'BL21B-VA-FVALV-01:CON', 'mm', '%d')
         if not fv1.getPosition() == 3.0:
             fv1(3.0)
+    def sendSms(self, message=""):
+        fedids = {'Nathan': 'xaf46449', 'Nikul': 'rvv47355', 'Rob': 'xos81802'}
+        for key in fedids.keys():
+            subprocess.call(['/dls_sw/prod/tools/RHEL6-x86_64/defaults/bin/dls-sendsms.py', fedids[key], message])
 
     def getMachineStatus(self):
         try:
@@ -186,6 +190,7 @@ class HPLC(object):
 
             for i, b in enumerate(self.bean.measurements):
                 if not self.getMachineStatus():
+                    self.sendSms("HPLC script stopped due to beam dump")
                     self.logger.error('Paused script due to beam dump. Hit play to resume')
                     self.jsf.pauseCurrentScript()
                 pause()
