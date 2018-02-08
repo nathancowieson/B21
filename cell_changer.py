@@ -114,7 +114,7 @@ class cellChanger(QtGui.QWidget):
         if value < 1E-1:
             self.lovac.setStyleSheet("QWidget { border: 2px solid black; background-color: %s }" %  QtGui.QColor(0, 0, 0).name())
             self.hivac.setStyleSheet("QWidget { border: 2px solid black; background-color: %s }" %  QtGui.QColor(255, 255, 255).name())
-        elif value > 2.9E2:
+        elif value > 9.9E2:
             self.hivac.setStyleSheet("QWidget { border: 2px solid black; background-color: %s }" %  QtGui.QColor(0, 0, 0).name())
             self.lovac.setStyleSheet("QWidget { border: 2px solid black; background-color: %s }" %  QtGui.QColor(255, 255, 255).name())
         else:
