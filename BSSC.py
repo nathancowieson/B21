@@ -62,6 +62,15 @@ class BSSCRun:
         currentVisit = GDAMetadataProvider.getInstance().getMetadataValue("visit")
         self.totalSteps = self.overheadsteps + self.bean.getMeasurements().size() * self.stepspersample
 
+    def setGdaStatus(self, status='BSSC'):
+        statuses = {'Idle': 0, 'HPLC': 1, 'BSSC': 2, 'Manual': 3, 'Other': 4}
+        try:
+            gdaStatus.getPosition()
+        except:
+            gdaStatus = SingleEpicsPositionerClass('fv1', 'BL21B-CS-IOC-01:GDASTATUS', 'BL21B-CS-IOC-01:GDASTATUS', 'BL21B-VA-FVALV-01:CON', 'BL21B-VA-FVALV-01:CON', 'mm', '%d')
+        if status in statuses.keys():
+            gdaStatus(statuses[status])
+        
     def getFastShutter(self):
         old_stdout = sys.stdout
         sys.stdout = mystdout = StringIO()
@@ -326,10 +335,12 @@ class BSSCRun:
             
             experiment_id = str(uuid.uuid4())
             for index, titration in enumerate(self.bean.getMeasurements()):
+                self.setGdaStatus('BSSC')
                 if not self.getMachineStatus():
                     self.sendSms("BSSC script stopped due to beam dump")
                     self.logger.error('Paused script due to beam dump. Hit play to resume')
                     self.jsf.pauseCurrentScript()
+                    self.setGdaStatus('Idle')
                 pause()
                 self.setSampleVolume(titration.getSampleVolume())
                 self.experiment_definition( [ self.jsonStringFromMeasurements(self.bean.getMeasurements()), str(index), experiment_id ] )
@@ -355,6 +366,7 @@ class BSSCRun:
             self.sample_type('sample')
         finally:
             self.addExperimentDefinitionToNxs(False)
+            self.setGdaStatus('Idle')
             print 'BSSC SCRIPT FINISHED NORMALLY'
 
     def exportFinalBeans(self):
