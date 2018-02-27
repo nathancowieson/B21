@@ -80,6 +80,7 @@ class HPLC(object):
             fv1 = SingleEpicsPositionerClass('fv1', 'BL21B-VA-FVALV-01:CON', 'BL21B-VA-FVALV-01:STA', 'BL21B-VA-FVALV-01:STA', 'BL21B-VA-FVALV-01:CON', 'mm', '%d')
         if not fv1.getPosition() == 3.0:
             fv1(3.0)
+
     def sendSms(self, message=""):
         fedids = {'Nathan': 'xaf46449', 'Nikul': 'rvv47355', 'Rob': 'xos81802', 'Katsuaki': 'vdf31527'}
         for key in fedids.keys():
@@ -194,7 +195,7 @@ class HPLC(object):
                     self.logger.error('Paused script due to beam dump. Hit play to resume')
                     self.jsf.pauseCurrentScript()
                 pause()
-                self.logger.info('---- STARTING RUN '+str(i)+' of '+str(len(self.bean.measurements))+': SAMPLE: '+b.getSampleName()+' ----')
+                self.logger.info('---- STARTING RUN '+str(i+1)+' of '+str(len(self.bean.measurements))+': SAMPLE: '+b.getSampleName()+' ----')
                 readout_time = 0.1
                 exposure_time = b.getTimePerFrame()
                 pre_run_delay = 120
