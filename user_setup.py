@@ -119,7 +119,8 @@ class UserSetup(object):
                 copyfile(scatter_in, scatter_out)
                 self.logger.info('copied scatter3.jar to the processing directory')
             else:
-                self.logger.info('Did not copy scatter to processing dir, already there')
+                copyfile(scatter_in, scatter_out)
+                self.logger.info('Replaced a version of scatter in the processing directory')
         else:
             self.logger.error('did not copy scatter to the processing directory, could not find jar file in /dls_sw/b21/scripts/TEMPLATES')
 
@@ -159,8 +160,8 @@ class UserSetup(object):
         biosaxs_outfile = self.visit_directory+'xml/default.biosaxs'
         hplc_outfile = self.visit_directory+'xml/default.hplc'
 
-        default_biosaxs = [('measurement', [('location', [('plate', '2'), ('row', 'A'), ('column', '9')]), ('sampleName', 'my buffer'), ('concentration', '0.0'), ('viscosity', 'medium'), ('molecularWeight', '0.0'), ('buffer', 'true'), ('buffers', ''), ('yellowSample', 'true'), ('timePerFrame', '0.5'), ('frames', '30'), ('exposureTemperature', '15.0'), ('key', 'None'), ('mode', 'BS'), ('visit', self.visit_id), ('username', 'b21user')]), ('measurement', [('location', [('plate', '1'), ('row', 'A'), ('column', '1')]), ('sampleName', 'my sample'), ('concentration', '1.0'), ('viscosity', 'medium'), ('molecularWeight', '66.0'), ('buffer', 'false'), ('buffers', '2a9'), ('yellowSample', 'true'), ('timePerFrame', '0.5'), ('frames', '30'), ('exposureTemperature', '15.0'), ('key', 'move'), ('mode', 'BS'), ('visit', self.visit_id), ('username', 'b21user')])]
-        default_hplc = [('measurement', [('location', [('plate', '1'), ('row', 'A'), ('column', '1')]), ('sampleName', 'my sample'), ('concentration', '5.0'), ('molecularWeight', '66.0'), ('timePerFrame', '1.0'), ('visit', self.visit_id), ('username', 'b21user'), ('comment', 'None'), ('buffers', '25 mM Tris pH 7.5, 200 mM NaCl'), ('mode', 'HPLC'), ('columnType', 'kw304'), ('duration', '30.0')])]
+        default_biosaxs = [('measurement', [('location', [('plate', '2'), ('row', 'A'), ('column', '9')]), ('sampleName', 'my buffer'), ('concentration', '0.0'), ('viscosity', 'medium'), ('molecularWeight', '0.0'), ('buffer', 'true'), ('buffers', ''), ('yellowSample', 'true'), ('timePerFrame', '1.0'), ('frames', '28'), ('exposureTemperature', '15.0'), ('key', ''), ('mode', 'BS'), ('move', 'true'), ('sampleVolume', '35'), ('visit', self.visit_id), ('username', 'b21user')]), ('measurement', [('location', [('plate', '1'), ('row', 'A'), ('column', '1')]), ('sampleName', 'my sample'), ('concentration', '1.0'), ('viscosity', 'medium'), ('molecularWeight', '66.0'), ('buffer', 'false'), ('buffers', '2a9'), ('yellowSample', 'true'), ('timePerFrame', '1.0'), ('frames', '28'), ('exposureTemperature', '15.0'), ('key', ''), ('mode', 'BS'), ('move', 'true'), ('sampleVolume', '35'), ('visit', self.visit_id), ('username', 'b21user')])]
+        default_hplc = [('measurement', [('location', 'A1'), ('sampleName', 'my sample'), ('concentration', '5.0'), ('molecularWeight', '66.0'), ('timePerFrame', '3.0'), ('visit', self.visit_id), ('username', 'b21user'), ('comment', 'None'), ('buffers', '25 mM Tris pH 7.5, 200 mM NaCl'), ('mode', 'HPLC'), ('columnType', 'kw304'), ('duration', '30.0')])]
         myxml = xmlReadWrite()
         myxml.setOutputType('biosaxs')
         open(biosaxs_outfile, 'w').write(myxml.parseToXml(default_biosaxs))
