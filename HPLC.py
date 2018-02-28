@@ -42,6 +42,7 @@ class HPLC(object):
         self.tfg = finder.listAllLocalObjects("gda.device.Timer")[0]
         self.ncddetectors = finder.listAllLocalObjects("uk.ac.gda.server.ncd.detectorsystem.NcdDetectorSystem")[0]
         self.jsf = JythonServerFacade.getInstance()
+        self.readout_time = 0.1
         #CREATE A LOGGER
         self.logger = logging.getLogger('HPLC')
         self.logger.setLevel(logging.INFO)
@@ -52,11 +53,11 @@ class HPLC(object):
             self.logger.addHandler(streamhandler)
         self.logger.info('HPLC class version '+self.__version__+' was instantiated')
         
-    def setupTfg(self, frames, readout_time, tpf):
+    def setupTfg(self, frames, tpf):
         self.tfg.clearFrameSets()
-        self.tfg.addFrameSet(frames, readout_time * 1000, tpf * 1000, int('00000100', 2), int('11111111', 2), 0, 0)#note, byte order is reversed!
+        self.tfg.addFrameSet(frames, self.readout_time * 1000, tpf * 1000, int('00000100', 2), int('11111111', 2), 0, 0)#note, byte order is reversed!
         self.tfg.loadFrameSets()
-        return frames * (tpf + readout_time)
+        return frames * (tpf + self.readout_time)
     
     def setTitle(self, title):
         GDAMetadataProvider.getInstance().setMetadataValue("title", title)
@@ -166,7 +167,16 @@ class HPLC(object):
         else:
             return False
             
-        
+    def NumberOfImages(self, duration_mins=32.0, exposure_time_secs=3.0):
+        run_list = []
+        number_of_images = int(ceil(duration_mins * 60.0 / ( self.readout_time + exposure_time_secs)))
+        while number_of_images > 1000:
+            run_list.append( (1000,exposure_time_secs) )
+            number_of_images -= 1000
+        if number_of_images > 0:
+            run_list.append( (number_of_images,exposure_time_secs) )
+        self.logger.info('Will collect: '+str(sum([x[0] for x in run_list]))+' images across '+str(len(run_list))+' nxs file')
+        return run_list
 
     def run(self, processing=True):
         try:
@@ -188,7 +198,7 @@ class HPLC(object):
                 
             self.setEnvironment('HPLC')
             self.setSampleType('sample+buffer')
-
+            
             for i, b in enumerate(self.bean.measurements):
                 if not self.getMachineStatus():
                     self.sendSms("HPLC script stopped due to beam dump")
@@ -196,7 +206,6 @@ class HPLC(object):
                     self.jsf.pauseCurrentScript()
                 pause()
                 self.logger.info('---- STARTING RUN '+str(i+1)+' of '+str(len(self.bean.measurements))+': SAMPLE: '+b.getSampleName()+' ----')
-                readout_time = 0.1
                 exposure_time = b.getTimePerFrame()
                 pre_run_delay = 120
                 
@@ -205,11 +214,11 @@ class HPLC(object):
                     runtime = int(b.getTotalDuration())
                 except:
                     self.logger.error('The run time of the experiment must be an integer and is in minutes, using 30 mins as a default')
-                    runtime = 30
-                number_of_images = int(ceil(runtime * 60.0 / ( readout_time + exposure_time)))
+                    runtime = 32
+                number_of_images = self.NumberOfImages(runtime, exposure_time)
+                
                 
                 #Set up run parameters
-                self.setupTfg(number_of_images, readout_time, exposure_time)
                 self.setTitle(b.getSampleName())
                 
                 #Get the inject signal
@@ -229,8 +238,11 @@ class HPLC(object):
                     self.logger.info('Did not find the inject signal, will proceed anyway.')
                     
                 #Start the data collection
-                self.logger.info('Starting collection of '+str(number_of_images)+'x'+str(exposure_time)+' second exposures')
-                StaticScan([self.ncddetectors]).run()
+                self.logger.info('Starting data collection')
+                for index,run in enumerate(number_of_images):
+                    self.setupTfg(run[0], run[1])
+                    self.logger.info('NXS file '+str(index+1)+' of '+str(len(number_of_images))+' for '+b.getSampleName())
+                    StaticScan([self.ncddetectors]).run()
                 self.logger.info('Finished collecting '+b.getSampleName())
             self.setSafetyShutter('Close')
             self.logger.info('SCRIPT FINISHED NORMALLY')
