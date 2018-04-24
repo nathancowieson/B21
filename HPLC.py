@@ -154,8 +154,8 @@ class HPLC(object):
             self.logger.error('setFastValve function requires either Close or Open as input')
 
     def getInjectSignal(self):
-        cutoff = 3.0
-        signal = 3.05
+        cutoff = 2.5
+        signal = 2.75
         try:
             signal = inject_signal.getPosition()
         except:
