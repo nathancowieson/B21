@@ -1,0 +1,5 @@
+#!/bin/bash
+for nxsfile in "$@"
+do
+h5dump -d /entry1/title/ $nxsfile | awk -v MYFILENAME=$nxsfile '/\(0\)/ {$1=MYFILENAME ": "; print; exit}'
+done
