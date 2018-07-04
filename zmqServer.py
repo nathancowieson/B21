@@ -14,7 +14,7 @@ sys.path.append('/dls/science/groups/b21/B21')
 from integrateNxs import integrateNxs
 
 
-mylogger = logger = logging.getLogger('zmqServer')
+mylogger = logging.getLogger('zmqServer')
 mylogger.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s: %(levelname)s: %(module)s: %(message)s',"[%Y-%m-%d %H:%M:%S]")
 filehandler = logging.FileHandler('/home/b21user/nathanc/intnxs.txt')
