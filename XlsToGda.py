@@ -5,10 +5,13 @@ Created on Oct 16, 2017
 @author: nathan
 '''
 
+from datetime import datetime
+from glob import glob
 import logging
 from optparse import OptionParser
 from optparse import OptionGroup
 import os
+import pwd
 import re
 import sys
 import xlrd
@@ -274,8 +277,161 @@ class xmlReadWrite():
 
         #Create some parameters
         self.measurements = []
-        self.output_type = None
+        self.output_type = 'biosaxs'
         self.xml_file = None
+
+        self.concentration = 10.0
+        self.viscosity = 'medium'
+        self.molecular_weight = 66.0
+        self.exposure_time = 1.0
+        self.number_of_frames = 28
+        self.exposure_temperature = 10.0
+        self.sample_volume = 35.0
+        self.visit_id = None
+        self.username = 'b21user'
+        self.comment = ''
+        self.buffer_composition = '25 mM Tris pH 7.5, 200 mM NaCl'
+        self.column_type = 'kw304'
+        self.duration = 32.0
+        self.domove = True
+
+    def setConcentration(self, setting=None):
+        try:
+            self.concentration = float(setting)
+            self.logger.info('Set concentration to: '+str(self.concentration))
+        except:
+            self.logger.error('Could not set concentration to: '+str(setting))
+
+    def getConcentration(self):
+        return str(self.concentration)
+ 
+    def setViscosity(self, setting=None):
+        try:
+            if not setting.lower() in ['low', 'medium', 'high']:
+                raise TypeError('Wrong option for viscosity setting')
+            else:
+                self.viscosity = setting.lower()
+            self.logger.info('Set viscosity to: '+str(self.viscosity))
+        except:
+            self.logger.error('Could not set concentration to: '+str(setting))
+
+    def getViscosity(self):
+        return str(self.viscosity)
+
+    def setMolecularWeight(self, setting=None):
+        try:
+            self.molecular_weight = float(setting)
+            self.logger.info('Set molecular weight to: '+str(self.molecular_weight))
+        except:
+            self.logger.error('Could not set molecular weight to: '+str(setting))
+
+    def getMolecularWeight(self):
+        return str(self.molecular_weight)
+
+    def setExposureTime(self, setting=None):
+        try:
+            self.exposure_time = float(setting)
+            self.logger.info('Set exposure time to: '+str(self.exposure_time))
+        except:
+            self.logger.error('Could not set exposure time to: '+str(setting))
+
+    def getExposureTime(self):
+        return str(self.exposure_time)
+
+    def setNumberOfFrames(self, setting=None):
+        try:
+            self.number_of_frames = int(setting)
+            self.logger.info('Set number of frames to: '+str(self.number_of_frames))
+        except:
+            self.logger.error('Could not set number of frames to: '+str(setting))
+
+    def getNumberOfFrames(self):
+        return str(self.number_of_frames)
+
+    def setExposureTemperature(self, setting=None):
+        try:
+            self.exposure_temperature = float(setting)
+            self.logger.info('Set exposure temperature to: '+str(self.exposure_temperature))
+        except:
+            self.logger.error('Could not set exposure temperature to: '+str(setting))
+
+    def getExposureTemperature(self):
+        return str(self.exposure_temperature)
+
+    def setSampleVolume(self, setting=None):
+        try:
+            self.sample_volume = float(setting)
+            self.logger.info('Set sample volume to: '+str(self.sample_volume))
+        except:
+            self.logger.error('Could not set sample volume: '+str(setting))
+
+    def getSampleVolume(self):
+        return str(self.sample_volume)
+
+    def setVisitId(self, setting=None):
+        try:
+            if not setting in [os.path.split(dirname)[-1] for dirname in glob('/dls/b21/data/'+str(datetime.now().year)+'/*')]:
+                raise RuntimeError('Visit does not exist')
+            else:
+                self.visit_id = setting
+                self.logger.info('Set visit id to: '+str(self.visit_id))
+        except:
+            self.logger.error('Could not set visit id: '+str(setting))
+
+    def getVisitId(self):
+        return str(self.visit_id)
+
+    def setUserName(self, setting=None):
+        try:
+            self.username = pwd.getpwnam(str(setting).lower())[0] 
+            self.logger.info('Set visit id to: '+str(self.visit_id))
+        except:
+            self.logger.error('Could not set username: '+str(setting))
+
+    def getUserName(self):
+        return str(self.username)
+
+    def setComment(self, setting=None):
+        self.comment = str(setting)
+        self.logger.info('Set comment.')
+
+    def getComment(self):
+        return str(self.comment)
+
+    def setBufferComposition(self, setting=None):
+        self.buffer_composition = str(setting)
+        self.logger.info('Set buffer composition.')
+
+    def getBufferComposition(self):
+        return str(self.buffer_composition)
+
+    def setColumnType(self, setting=None):
+        self.column_type = str(setting)
+        self.logger.info('Set column type to: '+str(self.column_type))
+
+    def getColumnType(self):
+        return str(self.column_type)
+
+    def setDuration(self, setting=None):
+        try:
+            self.duration = float(setting)
+            self.logger.info('Set HPLC run duration to: '+str(self.duration))
+        except:
+            self.logger.error('Could not set duration: '+str(setting))
+
+    def getDuration(self):
+        return str(self.duration)
+
+    def setDoMove(self, setting=None):
+        try:
+            if type(setting) == type(True):
+                self.domove = setting
+            self.logger.info('Set move sample during collection to: '+str(self.domove))
+        except:
+            self.logger.error('Could not set sample movement to: '+str(setting))
+
+    def getDoMove(self):
+        return str(self.domove)
 
     def appendMeasurements(self, measurement_array):
         if type(measurement_array) == type([]):
@@ -285,12 +441,73 @@ class xmlReadWrite():
                         self.measurements.append(measurement)
                     else:
                         self.logger.error('Measurements tuples in the measurement array should have "measurement" as the first term')
-                self.logger.error('Measurements in the measurement array should be tuples')
+                else:
+                    self.logger.error('Measurements in the measurement array should be tuples')
         else:
             self.logger.error('appendMeasurement function expects an array as an argument')
                     
     def returnMeasurements(self):
         return self.measurements
+
+    def createMeasurement(self, measurement_type='sample', name='mysample', well='1A1', matching_buffer='2A9'):
+        try:
+            name = str(name)
+            if self.output_type == 'biosaxs':
+                plate = str(int(well[0]))
+                row = str(well[1])
+                column = str(int(well[2:]))
+                self.logger.info('Adding biosaxs sample: '+str(name))
+                if measurement_type == 'sample':
+                    buffer_plate = str(int(matching_buffer[0]))
+                    buffer_row = str(matching_buffer[1])
+                    buffer_column = str(int(matching_buffer[2:]))
+                    isbuffer = False
+                else:
+                    buffer_plate = ''
+                    buffer_row = ''
+                    buffer_column = ''
+                    isbuffer = True
+                return ('measurement',
+                        [('location',
+                          [('plate', plate),
+                           ('row', row),
+                           ('column', column)]),
+                         ('sampleName', name),
+                         ('concentration', str(self.concentration)),
+                         ('viscosity', self.viscosity),
+                         ('molecularWeight', str(self.molecular_weight)),
+                         ('buffer', str(isbuffer).lower()),
+                         ('buffers', buffer_plate+buffer_row+buffer_column),
+                         ('yellowSample', 'true'),
+                         ('timePerFrame', str(self.exposure_time)),
+                         ('frames', str(self.number_of_frames)),
+                         ('exposureTemperature', str(self.exposure_temperature)),
+                         ('key', ''),
+                         ('mode', 'BS'),
+                         ('move', str(self.domove).lower()),
+                         ('sampleVolume', str(self.sample_volume)),
+                         ('visit', self.visit_id),
+                         ('username', self.username)])
+            elif self.output_type == 'hplc':
+                return ('measurement',
+                        [('location', str(well)),
+                         ('sampleName', name),
+                         ('concentration', str(self.concentration)),
+                         ('molecularWeight', str(self.molecular_weight)),
+                         ('timePerFrame', str(self.exposure_time)),
+                         ('visit', self.visit_id),
+                         ('username', self.username),
+                         ('comment', self.comment),
+                         ('buffers', self.buffer_composition),
+                         ('mode', 'HPLC'),
+                         ('columnType', self.column_type),
+                         ('duration', str(self.duration))])
+            else:
+                self.logger.error('Return type must be hplc or biosaxs, not: '+str(self.output_type))
+                return False
+        except:
+            self.logger.error('Failed to create measurement entry for sample: '+str(name))
+            
 
     def setOutputType(self, output_type):
         if output_type in ['hplc', 'biosaxs']:
@@ -302,7 +519,7 @@ class xmlReadWrite():
     def returnType(self):
         return self.output_type
     
-    def inputFile(self, filename):
+    def setXmlFile(self, filename):
         try:
             filename = os.path.abspath(filename)
             if not os.path.isdir(os.path.split(filename)[0]):
@@ -328,9 +545,11 @@ class xmlReadWrite():
             self.logger.error(message)
             return False
         
-    def parseFromXml(self, filename):
+    def parseFromXml(self, filename=None):
+        if filename == None:
+            filename = self.xml_file
         output_array = []
-        if self.inputFile(filename):
+        if self.setXmlFile(filename):
             try:
                 root = ET.parse(filename).getroot()
             except:
@@ -341,7 +560,7 @@ class xmlReadWrite():
             for measurement in root.getchildren():
                 measurement_array = []
                 for field in measurement.getchildren():
-                    if field.tag == 'location':
+                    if field.tag == 'location' and self.output_type == 'biosaxs':
                         location_array = []
                         for subfield in field.getchildren():
                             location_array.append( (str(subfield.tag),str(subfield.text)) )
