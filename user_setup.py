@@ -290,7 +290,7 @@ class UserSetup(object):
         host = 'localhost'
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        target_dir = '/dls/b21/data/2017/cm16775-4/processing/hplc_forwarding_link'
+        target_dir = '/dls/b21/data/2018/cm19678-3/processing/hplc_forwarding_link'
         source_dir = self.visit_directory+'hplc/saxs'
 
         #If you are already b21user you can go ahead directly
