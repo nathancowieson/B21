@@ -36,6 +36,7 @@ class HPLC(object):
         finder = gda.factory.Finder.getInstance()
         find = finder.find
         self.shutter = find('shutter')
+        self.bsdiode = find('bsdiode')
         self.sample_type = find('sample_type')
         self.sampleName = find("samplename")
         self.environment = find("sample_environment")
@@ -86,6 +87,17 @@ class HPLC(object):
         fedids = {'Nathan': 'xaf46449', 'Nikul': 'rvv47355', 'Rob': 'xos81802', 'Katsuaki': 'vdf31527'}
         for key in fedids.keys():
             subprocess.call(['/dls_sw/prod/tools/RHEL6-x86_64/defaults/bin/dls-sendsms.py', fedids[key], message])
+
+    def killHplc(self, state=False):
+        try:
+            kill_hplc.getPosition()
+        except:
+            kill_hplc = SingleEpicsPositionerClass('kill_hplc', 'BL21B-EA-HPLC-01:MOD1:SHUTDOWN', 'BL21B-EA-HPLC-01:MOD1:SHUTDOWN', 'BL21B-EA-HPLC-01:MOD1:SHUTDOWN', 'BL21B-EA-HPLC-01:MOD1:SHUTDOWN', 'mm', '%d')
+
+        if state:
+            kill_hplc(1)
+        else:
+            kill_hplc(0)
 
     def getMachineStatus(self):
         try:
@@ -178,6 +190,32 @@ class HPLC(object):
         self.logger.info('Will collect: '+str(sum([x[0] for x in run_list]))+' images across '+str(len(run_list))+' nxs file')
         return run_list
 
+    def testForBeam(self):
+        self.setFastShutter('Open')
+        sleep(1)
+        beamstop_diode_reading = self.bsdiode.getPosition()
+        self.setFastShutter('Close')
+        if beamstop_diode_reading > 10E6:
+            return True
+        else:
+            return False
+
+    def preRunCheck(self):
+        status = False
+        message = "HPLC run aborted due to: "
+        if not self.getMachineStatus():
+            message += 'Machine is down'
+        elif not self.getSafetyShutter():
+            message += 'Safety shutter is closed'
+        elif not self.getHplcValve():
+            message += 'HPLC valve is closed'
+        elif not self.testForBeam():
+            message += 'no beam on the beamstop diode'
+        else:
+            status = True
+            message = 'Pre-run check passed successfully'
+        return (status, message)
+
     def run(self, processing=True):
         try:
             if not self.getSafetyShutter():
@@ -199,12 +237,19 @@ class HPLC(object):
             self.setEnvironment('HPLC')
             self.setSampleType('sample+buffer')
             
+            self.isError = False
             for i, b in enumerate(self.bean.measurements):
-                if not self.getMachineStatus():
-                    self.sendSms("HPLC script stopped due to beam dump")
-                    self.logger.error('Paused script due to beam dump. Hit play to resume')
-                    self.jsf.pauseCurrentScript()
                 pause()
+                my_check = self.preRunCheck()
+                if not my_check[0]:
+                    self.sendSms(my_check[1])
+                    self.logger.error(my_check[1])
+                    self.killHplc(True)
+                    self.isError = True
+                    break
+                else:
+                    self.logger.info(my_check[1])
+                
                 self.logger.info('---- STARTING RUN '+str(i+1)+' of '+str(len(self.bean.measurements))+': SAMPLE: '+b.getSampleName()+' ----')
                 exposure_time = b.getTimePerFrame()
                 pre_run_delay = 120
@@ -236,7 +281,7 @@ class HPLC(object):
                     sleep(0.1)
                 if not found_signal:
                     self.logger.info('Did not find the inject signal, will proceed anyway.')
-                    
+                
                 #Start the data collection
                 self.logger.info('Starting data collection')
                 for index,run in enumerate(number_of_images):
@@ -245,7 +290,10 @@ class HPLC(object):
                     StaticScan([self.ncddetectors]).run()
                 self.logger.info('Finished collecting '+b.getSampleName())
             self.setSafetyShutter('Close')
-            self.logger.info('SCRIPT FINISHED NORMALLY')
+            if self.isError:
+                self.logger.error('SCRIPT WAS TERMINATED PREMATURELY')
+            else:
+                self.logger.info('SCRIPT FINISHED NORMALLY')
             #namespace:
             #b.getLocation().getRow()
             #b.getLocation().getColumn()
