@@ -288,8 +288,6 @@ class UserSetup(object):
         #Set some parameters
         user = 'b21user'
         host = 'localhost'
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         target_dir = '/dls/b21/data/2018/cm19678-3/processing/hplc_forwarding_link'
         source_dir = self.visit_directory+'hplc/saxs'
 
@@ -309,6 +307,8 @@ class UserSetup(object):
             #Give three chances to get the password right
             tries = 0
             success = False
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             while not success and tries < 3:
                 mypass = getpass.getpass('Enter b21user password: ')
                 try:
@@ -338,7 +338,63 @@ class UserSetup(object):
                     self.logger.error('Failed to link the new directory, you will have to do this manually')
             else:
                 self.logger.error('Failed to login as b21user after three tries, you will have to make the HPLC link manually')
-                    
+            client.close()
+
+    def MakeProcessingDirSymLink(self):
+        #Set some parameters
+        user = 'b21user'
+        host = 'localhost'
+        target_dir = '/home/b21user/Documents/current_visit'
+        source_dir = self.visit_directory+'processing'
+
+        #If you are already b21user you can go ahead directly
+        if getpass.getuser() == user:
+            self.logger.info('Making symlink '+target_dir+': pointing to: '+source_dir)
+            try:
+                if os.path.islink(target_dir):
+                    os.unlink(target_dir)
+                os.symlink(source_dir, target_dir)
+            except:
+                self.logger.error('Failed to make the processing dir symlink, this is only a shortcut for scatter so no dramas')
+        #If you are not b21user you need to switch
+        else:
+            self.logger.info('To create the processing dir link we switch to b21user')
+
+            #Give three chances to get the password right
+            tries = 0
+            success = False
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            while not success and tries < 3:
+                mypass = getpass.getpass('Enter b21user password: ')
+                try:
+                    client.connect(host, username=user, password=mypass)
+                    success = True
+                except:
+                    self.logger.error('Failed to login as b21user, prob wrong password, try again')
+                    tries += 1
+
+
+            if success:
+                self.logger.info('Unlinking the old dir')
+                command = 'unlink '+target_dir
+                chan = client.get_transport().open_session()
+                chan.exec_command(command)
+                if chan.recv_exit_status() == 0:
+                    self.logger.info('Successfully unlinked the old directory.')
+                else:
+                    self.logger.error('Failed to unlink the old dir, will try to link the new one anyway.')
+                self.logger.info('Linking the new directory')
+                command = 'ln -s '+source_dir+' '+target_dir
+                chan = client.get_transport().open_session()
+                chan.exec_command(command)
+                if chan.recv_exit_status() == 0:
+                    self.logger.info('Linked the new directory')
+                else:
+                    self.logger.error('Failed to link the new directory, you will have to do this manually')
+            else:
+                self.logger.error('Failed to login as b21user after three tries, you will have to make the HPLC link manually')
+            client.close()
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
