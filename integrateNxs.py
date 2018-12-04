@@ -120,9 +120,10 @@ class integrateNxs(object):
                 self.logger.info('Set the processing pipeline to: '+self.pipeline_file)
                 return True
             else:
-                error_message = 'Could not find a pipeline file that predates this nxs file'
+                error_message = 'Could not find a pipeline file that predates this nxs file, will use latest'
                 self.logger.error(error_message)
-                raise IOError(error_message)
+                self.pipeline_file = filedates[sorted(filedates.keys())[-1]]
+                return True
         except:
             return False
 
