@@ -46,7 +46,7 @@ class Window(QtGui.QWidget):
         #LABELS AND INDICATORS FOR VACUUM STATE
         self.vac_label = QtGui.QLabel('Sample vacuum:', self)
         self.vac_label.move(20, 76)
-        self.vac_low_label = QtGui.QLabel('<1E-1', self)
+        self.vac_low_label = QtGui.QLabel('<1.1E-1', self)
         self.vac_low_label.move(140, 50)
         self.vac_high_label = QtGui.QLabel('~1E3', self)
         self.vac_high_label.move(200, 50)
@@ -234,7 +234,7 @@ class Worker(QtCore.QThread):
     def onVacChange(self, pvname=None, value=None, host=None, **kws):
         if value == None:
             value=self.pvs['sample_vac'].get()
-        if value < 1E-1:
+        if value < 1.1E-1:
             status = 'Low'
         elif value > 7.5E2:
             status = 'High'
@@ -245,7 +245,7 @@ class Worker(QtCore.QThread):
 
     def getVacStatus(self):
         status = self.pvs['sample_vac'].get()
-        if status < 1E-1:
+        if status < 1.1E-1:
             return 'Low'
         elif status > 7.5E2:
             return 'High'
