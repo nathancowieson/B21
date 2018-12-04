@@ -41,7 +41,7 @@ if __name__ == '__main__':
 
 
     #define visit
-    visit_pattern = re.compile("[mncis][mxwnt][0-9]{5}-[0-9]{1,3}")
+    visit_pattern = re.compile("[mncis][pmxwnt][0-9]{5}-[0-9]{1,3}")
     if visit_pattern.match(options.nxs_file.split('/')[5]):
         visit = VisitID(options.nxs_file.split('/')[5])
         logger.info('Set visit to: '+visit.ReturnVisitID())
