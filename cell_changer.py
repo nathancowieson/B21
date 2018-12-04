@@ -26,7 +26,8 @@ class Window(QtGui.QWidget):
         if len(self.logger.handlers) == 0:
             self.logger.addHandler(streamhandler)
             self.logger.info('cellChanger was started')
-
+        self.lo_vac_cutoff = 1.1E-1
+        self.hi_vac_cutoff = 7.5E2
         QtGui.QWidget.__init__(self, parent)
         self.thread = Worker()
 
@@ -46,7 +47,7 @@ class Window(QtGui.QWidget):
         #LABELS AND INDICATORS FOR VACUUM STATE
         self.vac_label = QtGui.QLabel('Sample vacuum:', self)
         self.vac_label.move(20, 76)
-        self.vac_low_label = QtGui.QLabel('<1.1E-1', self)
+        self.vac_low_label = QtGui.QLabel('<'+str(self.lo_vac_cutoff), self)
         self.vac_low_label.move(140, 50)
         self.vac_high_label = QtGui.QLabel('~1E3', self)
         self.vac_high_label.move(200, 50)
@@ -234,9 +235,9 @@ class Worker(QtCore.QThread):
     def onVacChange(self, pvname=None, value=None, host=None, **kws):
         if value == None:
             value=self.pvs['sample_vac'].get()
-        if value < 1.1E-1:
+        if value < self.lo_vac_cutoff:
             status = 'Low'
-        elif value > 7.5E2:
+        elif value > self.hi_vac_cutoff:
             status = 'High'
         else:
             status = 'Intermediate'
@@ -245,9 +246,9 @@ class Worker(QtCore.QThread):
 
     def getVacStatus(self):
         status = self.pvs['sample_vac'].get()
-        if status < 1.1E-1:
+        if status < self.lo_vac_cutoff:
             return 'Low'
-        elif status > 7.5E2:
+        elif status > self.hi_vac_cutoff:
             return 'High'
         else:
             return 'Intermediate'
