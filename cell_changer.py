@@ -26,8 +26,8 @@ class Window(QtGui.QWidget):
         if len(self.logger.handlers) == 0:
             self.logger.addHandler(streamhandler)
             self.logger.info('cellChanger was started')
-        self.lo_vac_cutoff = 1.1E-1
-        self.hi_vac_cutoff = 7.5E2
+        self.lo_vac_cutoff = 1.1E-1 # these are defined in the worker class
+        self.hi_vac_cutoff = 7.5E2  # also change at line 192
         QtGui.QWidget.__init__(self, parent)
         self.thread = Worker()
 
@@ -188,6 +188,9 @@ class Worker(QtCore.QThread):
         #CREATE A LOGGER
         self.logger = logging.getLogger('cellChanger')
         self.logger.info('worker joined cellChanger logger')
+        #SOME PARAMETERS
+        self.lo_vac_cutoff = 1.1E-1
+        self.hi_vac_cutoff = 7.5E2
         
         QtCore.QThread.__init__(self, parent)
 
