@@ -79,7 +79,7 @@ if __name__ == '__main__':
     required = OptionGroup(parser, "Required Arguments")
     optional = OptionGroup(parser, "Optional Arguments")
     required.add_option("-m", "--message", action="store", type="string", dest="message", default="", help="A message to add to the snapshot line i.e. 'beam was off!' or 'beam was good'")
-
+    optional.add_option("-n", "--header", action="store_true", dest="header", default=False, help="Add a new header string, i.e if PVs have changed. Default is False.")
     parser.add_option_group(required)
     parser.add_option_group(optional)
     (options, args) = parser.parse_args()
@@ -91,6 +91,9 @@ if __name__ == '__main__':
     job.GetFromEpics()
     if os.path.isfile(job.myconfig['SETTINGS']['OUTFILE']):
         with open(job.myconfig['SETTINGS']['OUTFILE'], 'a') as outfile:
+            if options.header:
+                job.logger.info('Will add a new header line')
+                outfile.write(job.ReturnPVString('header'))
             outfile.write(job.ReturnPVString('data'))
             job.logger.info('Wrote snapshot to file')
     else:
