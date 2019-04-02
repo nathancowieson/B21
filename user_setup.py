@@ -258,7 +258,7 @@ class UserSetup(object):
         else:
             self.logger.error(str(self.pipeline_file)+' does not exist or is not of type nxs')
                     
-    def WriteJsonTemplate(self):
+    def WriteJsonTemplate(self, activeMQ=False):
         self.logger.info('Making xml/templates and processing/log directories')
         log_dir = self.visit_directory+'processing/log/'
         template_dir = self.visit_directory+'xml/templates/'
@@ -277,8 +277,10 @@ class UserSetup(object):
                 "processingPath": self.output_pipeline_file,
                 "outputFilePath": "",
                 "deleteProcessingFile": 'false',
-                "datasetPath": "/entry1/detector"
+                "datasetPath": "/entry1/detector/data"
                 }
+            if activeMQ:
+                template_dict['publisherURI'] = 'tcp://b21-control:61616'
             with open(template_dir+'template.json', 'w') as json_file:
                 json_file.write(json.dumps(template_dict))
             self.logger.info('Wrote JSON template file in: '+template_dir+'template.json')
@@ -408,6 +410,7 @@ if __name__ == '__main__':
     optional.add_option("-x", "--q_max", action="store", type="float", dest="hi_q", default=None, help="Set the high Q limit for the radial integration")
     optional.add_option("-a", "--abs_cal", action="store", type="float", dest="abs_cal", default=None, help="Multiplier for setting absolute calibration, default is to leave it as is.")
     optional.add_option("-o", "--output_file", action="store", type="string", dest="output_file", default=None, help="The location of the pipeline nxs output file. The default is into current visit processing dir with name processing_pipeline_<todays date>.nxs ")
+    optional.add_option("-m", "--mq", action="store_true", dest="activemq", default=False, help="Turn on activeMQ communication, default is False.")
 
     parser.add_option_group(required)
     parser.add_option_group(optional)
@@ -422,7 +425,7 @@ if __name__ == '__main__':
         job.CopyIcons()
         job.CopyScatter()
         job.WriteProcessingPipeline(output_file = options.output_file, low_q = options.lo_q, high_q = options.hi_q, abs_cal = options.abs_cal)
-        job.WriteJsonTemplate()
+        job.WriteJsonTemplate(activeMQ=options.activemq)
         job.MakeHplcSymLink()
         job.WriteDefaultXmlFiles()
         job.logger.info('Finished successfully')
