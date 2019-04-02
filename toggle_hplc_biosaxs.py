@@ -39,7 +39,7 @@ class toggleHplcBiosaxs(object):
         self.logger.info('Running the toggleHplcBiosaxs script')
 
     def getFromRedis(self, key='biosaxs_table_x'):
-        keys = ['biosaxs_table_x', 'biosaxs_table_y', 'hplc_table_x', 'hplc_table_y']
+        keys = ['biosaxs_table_x', 'biosaxs_table_y', 'hplc_table_x', 'hplc_table_y', 'gelcell_table_x', 'gelcell_table_y']
         if key in keys:
             if self.redis.exists(key):
                 return float(self.redis.get(key))
@@ -76,7 +76,6 @@ class toggleHplcBiosaxs(object):
             return True
         
     def setBiosaxsPosition(self):
-        ['biosaxs_table_x', 'biosaxs_table_y', 'hplc_table_x', 'hplc_table_y']
         try:
             motor_x = self.motor_x.get('RBV')
             self.redis.set('biosaxs_table_x', motor_x)
@@ -100,11 +99,37 @@ class toggleHplcBiosaxs(object):
             self.logger.info('Set saxs cell to the BIOSAXS position')
             return True
 
+    def setGelcellPosition(self):
+        try:
+            motor_x = self.motor_x.get('RBV')
+            self.redis.set('gelcell_table_x', motor_x)
+            self.logger.info('Set GELCELL motor_x position to: '+str(motor_x))
+            motor_y = self.motor_y.get('RBV')
+            self.redis.set('gelcell_table_y', motor_y)
+            self.logger.info('Set GELCELL motor_y position to: '+str(motor_y))
+            return True
+        except:
+            self.logger.error('Could not set the BIOSAXS position, check redis, check epics')
+
+    def gotoGelcellPosition(self):
+        motor_x = self.getFromRedis('gelcell_table_x')
+        motor_y = self.getFromRedis('gelcell_table_y')
+        if None in [motor_x, motor_y]:
+            self.logger.error('Cannot go to GELCELL position, not set in redis')
+            return False
+        else:
+            self.motor_x.put('VAL', motor_x, wait=True)
+            self.motor_y.put('VAL', motor_y, wait=True)
+            self.logger.info('Set saxs cell to the BIOSAXS position')
+            return True
+
     def returnStatus(self):
         if self.getFromRedis('biosaxs_table_x')+self.deadband > self.motor_x.get('RBV') > self.getFromRedis('biosaxs_table_x')-self.deadband and self.getFromRedis('biosaxs_table_y')+self.deadband > self.motor_y.get('RBV') > self.getFromRedis('biosaxs_table_y')-self.deadband:
             return 'biosaxs'
         elif self.getFromRedis('hplc_table_x')+self.deadband > self.motor_x.get('RBV') > self.getFromRedis('hplc_table_x')-self.deadband and self.getFromRedis('hplc_table_y')+self.deadband > self.motor_y.get('RBV') > self.getFromRedis('hplc_table_y')-self.deadband:
             return 'hplc'
+        elif self.getFromRedis('gelcell_table_x')+self.deadband > self.motor_x.get('RBV') > self.getFromRedis('gelcell_table_x')-self.deadband and self.getFromRedis('gelcell_table_y')+self.deadband > self.motor_y.get('RBV') > self.getFromRedis('gelcell_table_y')-self.deadband:
+            return 'gelcell'
         else:
             return 'None'
                   
@@ -114,8 +139,8 @@ if __name__ == '__main__':
 
     parser = OptionParser()
     optional = OptionGroup(parser, "Optional Arguments")
-    optional.add_option("-s", "--set", action="store", type="string", dest="set", default="None", help="Use the current table position to be the setpoint for either biosaxs or hplc, takes 'hplc' or 'biosaxs' as argument")
-    optional.add_option("-g", "--goto", action="store", type="string", dest="goto", default="None", help="Goto a set position, takes 'hplc' or 'biosaxs' as argument")
+    optional.add_option("-s", "--set", action="store", type="string", dest="set", default="None", help="Use the current table position to be the setpoint for either biosaxs, hplc or gelcell, takes 'hplc', 'gelcell or 'biosaxs' as argument")
+    optional.add_option("-g", "--goto", action="store", type="string", dest="goto", default="None", help="Goto a set position, takes 'hplc', 'gellcell' or 'biosaxs' as argument")
     optional.add_option("-x", "--status", action="store_true", dest="status", default=False, help="Returns the current position of the cell and exits.")
 
     parser.add_option_group(optional)
@@ -128,12 +153,16 @@ if __name__ == '__main__':
         job.setHplcPosition()
     elif options.set.lower() == 'biosaxs':
         job.setBiosaxsPosition()
+    elif options.set.lower() == 'gelcell':
+        job.setGelcellPosition()
     else:
         pass
     if options.goto.lower() == 'hplc':
         job.gotoHplcPosition()
     elif options.goto.lower() == 'biosaxs':
         job.gotoBiosaxsPosition()
+    elif options.goto.lower() == 'gelcell':
+        job.gotoGelcellPosition()
     else:
         pass
     job.logger.info('FINISHED NORMALLY!')
