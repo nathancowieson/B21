@@ -294,6 +294,7 @@ class xmlReadWrite():
         self.column_type = 'kw304'
         self.duration = 32.0
         self.domove = True
+        self.key = ''
 
     def setConcentration(self, setting=None):
         try:
@@ -412,6 +413,13 @@ class xmlReadWrite():
     def getColumnType(self):
         return str(self.column_type)
 
+    def setKey(self, setting=''):
+        self.key = str(setting)
+        self.logger.info('Set key to: '+str(self.key))
+
+    def getKey(self):
+        return str(self.key)
+
     def setDuration(self, setting=None):
         try:
             self.duration = float(setting)
@@ -482,7 +490,7 @@ class xmlReadWrite():
                          ('timePerFrame', str(self.exposure_time)),
                          ('frames', str(self.number_of_frames)),
                          ('exposureTemperature', str(self.exposure_temperature)),
-                         ('key', ''),
+                         ('key', self.key),
                          ('mode', 'BS'),
                          ('move', str(self.domove).lower()),
                          ('sampleVolume', str(self.sample_volume)),
