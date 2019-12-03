@@ -30,7 +30,7 @@ class HPLC(object):
     """
     
     def __init__(self, filename):
-        self.__version__ = '1.01'
+        self.__version__ = '1.02'
         self.hplcFile = filename
         self.bean = HplcSessionBean.createFromXML(filename)
         finder = gda.factory.Finder.getInstance()
@@ -84,6 +84,16 @@ class HPLC(object):
         if status in statuses.keys():
             gdaStatus(statuses[status])
 
+    def getGdaStatus(self):
+        statuses = {0: 'Idle', 1: 'HPLC', 2: 'BSSC', 3: 'Manual', 4: 'Other'}
+        position = 4
+        try:
+            position = gdaStatus.getPosition()
+        except:
+            gdaStatus = SingleEpicsPositionerClass('fv1', 'BL21B-CS-IOC-01:GDASTATUS', 'BL21B-CS-IOC-01:GDASTATUS', 'BL21B-VA-FVALV-01:CON', 'BL21B-VA-FVALV-01:CON', 'mm', '%d')
+            position = gdaStatus.getPosition()
+        return statuses[position]
+
     def armFastValve(self):
         try:
             fv1.getPosition()
@@ -96,6 +106,7 @@ class HPLC(object):
         fedids = {'Nathan': 'xaf46449', 'Nikul': 'rvv47355', 'Rob': 'xos81802', 'Katsuaki': 'vdf31527'}
         for key in fedids.keys():
             subprocess.call(['/dls_sw/prod/tools/RHEL6-x86_64/defaults/bin/dls-sendsms.py', fedids[key], message])
+        self.logger.info('Sent an SMS')
 
     def killHplc(self, state=False):
         try:
@@ -291,7 +302,7 @@ class HPLC(object):
                     sleep(0.1)
                 if not found_signal:
                     self.logger.info('Did not find the inject signal, will proceed anyway.')
-                
+                    self.sendSms(str(i+1)+' of '+str(len(self.bean.measurements))+': missed the injection signal')
                 #Start the data collection
                 self.logger.info('Starting data collection')
                 for index,run in enumerate(number_of_images):
@@ -322,6 +333,6 @@ class HPLC(object):
             self.setGdaStatus('Idle')
             self.logger.error('SCRIPT TERMINATED IN ERROR')
         finally:
-            self.setGdaStatus('Idle')
-            self.logger.error('SCRIPT TERMINATED')
+            if not self.getGdaStatus() == 'Idle':
+                self.logger.error('SCRIPT TERMINATED IN ERROR')
 
