@@ -12,6 +12,7 @@ from datetime import datetime
 import sys
 import getpass
 import paramiko
+import redis
 import subprocess
 from glob import glob
 from shutil import copyfile
@@ -45,7 +46,7 @@ class UserSetup(object):
         self.calibration_file = self.template_dir+'current_calibration.nxs'
         self.pipeline_file = self.template_dir+'current_pipeline.nxs'
         self.output_pipeline_file = False
-
+        self.redis = redis.StrictRedis(host='b21-ws005.diamond.ac.uk', port=6379, db=0)
         ###start a log file
         self.logger = logging.getLogger('UserSetup')
         self.logger.setLevel(logging.DEBUG)
@@ -113,16 +114,54 @@ class UserSetup(object):
 
     def CopyScatter(self):
         scatter_in = self.template_dir+'scatter3.jar'
+        scatter4_in = self.template_dir+'scatterIV.jar'
         scatter_out = self.visit_directory+'processing/scatter3.jar'
+        scatter4_out = self.visit_directory+'processing/scatterIV.jar'
+        scatter_config = self.visit_directory+'processing/scatter.config'
+        config_contents = [
+            datetime.now().strftime('#%a %b %d %H:%M:%S BST %Y'),
+            'workingDirectory=X\:\\\\'+str(datetime.now().year)+'\\\\'+self.visit_id+'\\\\processing',
+            'atsasDirectory=C\:\\\\atsas',
+            'beamlineOrManufacturer=B21',
+            'xraysource=0',
+            'threshold=0.35',
+            'subtractionDirectory=X\:\\\\'+str(datetime.now().year)+'\\\\'+self.visit_id+'\\\\processing']
+        with open(scatter_config, 'w') as f:
+            f.write('\r\n'.join(config_contents))
+            
         if os.path.isfile(scatter_in):
             if not os.path.isfile(scatter_out):
                 copyfile(scatter_in, scatter_out)
                 self.logger.info('copied scatter3.jar to the processing directory')
+                
             else:
                 copyfile(scatter_in, scatter_out)
                 self.logger.info('Replaced a version of scatter in the processing directory')
         else:
             self.logger.error('did not copy scatter to the processing directory, could not find jar file in /dls_sw/b21/scripts/TEMPLATES')
+        if os.path.isfile(scatter4_in):
+            if not os.path.isfile(scatter4_out):
+                copyfile(scatter4_in, scatter4_out)
+                self.logger.info('copied scatterIV.jar to the processing directory')
+                
+            else:
+                copyfile(scatter4_in, scatter4_out)
+                self.logger.info('Replaced a version of scatterIV in the processing directory')
+        else:
+            self.logger.error('did not copy scatterIV to the processing directory, could not find jar file in /dls_sw/b21/scripts/TEMPLATES')
+
+    def CopyBSA(self):
+        bsa_in = self.template_dir+'BSA.pdb'
+        bsa_out = self.visit_directory+'processing/BSA.pdb'
+            
+        if os.path.isfile(bsa_in):
+            if not os.path.isfile(bsa_out):
+                copyfile(bsa_in, bsa_out)
+                self.logger.info('copied BSA.pdb to the processing directory')
+            else:
+                self.logger.info('BSA.pdb already exists in the processing dir.')
+        else:
+            self.logger.error('did not copy BSA.pdb to the processing directory, did not exist in /dls_sw/b21/scripts/TEMPLATES')
 
     def GetCurrentProcessingFile(self):
         processing_file = self.template_dir+'current_pipeline.nxs'
@@ -161,7 +200,7 @@ class UserSetup(object):
         hplc_outfile = self.visit_directory+'xml/default.hplc'
 
         default_biosaxs = [('measurement', [('location', [('plate', '2'), ('row', 'A'), ('column', '9')]), ('sampleName', 'my buffer'), ('concentration', '0.0'), ('viscosity', 'medium'), ('molecularWeight', '0.0'), ('buffer', 'true'), ('buffers', ''), ('yellowSample', 'true'), ('timePerFrame', '1.0'), ('frames', '28'), ('exposureTemperature', '15.0'), ('key', ''), ('mode', 'BS'), ('move', 'true'), ('sampleVolume', '35'), ('visit', self.visit_id), ('username', 'b21user')]), ('measurement', [('location', [('plate', '1'), ('row', 'A'), ('column', '1')]), ('sampleName', 'my sample'), ('concentration', '1.0'), ('viscosity', 'medium'), ('molecularWeight', '66.0'), ('buffer', 'false'), ('buffers', '2a9'), ('yellowSample', 'true'), ('timePerFrame', '1.0'), ('frames', '28'), ('exposureTemperature', '15.0'), ('key', ''), ('mode', 'BS'), ('move', 'true'), ('sampleVolume', '35'), ('visit', self.visit_id), ('username', 'b21user')])]
-        default_hplc = [('measurement', [('location', 'A1'), ('sampleName', 'my sample'), ('concentration', '5.0'), ('molecularWeight', '66.0'), ('timePerFrame', '3.0'), ('visit', self.visit_id), ('username', 'b21user'), ('comment', 'None'), ('buffers', '25 mM Tris pH 7.5, 200 mM NaCl'), ('mode', 'HPLC'), ('columnType', 'kw304'), ('duration', '32.0')])]
+        default_hplc = [('measurement', [('location', 'A1'), ('sampleName', 'my sample'), ('concentration', '5.0'), ('molecularWeight', '66.0'), ('timePerFrame', '3.0'), ('visit', self.visit_id), ('username', 'b21user'), ('comment', 'None'), ('buffers', '25 mM Tris pH 7.5, 200 mM NaCl'), ('mode', 'HPLC'), ('columnType', 'KW403'), ('duration', '32.0')])]
         myxml = xmlReadWrite()
         myxml.setOutputType('biosaxs')
         open(biosaxs_outfile, 'w').write(myxml.parseToXml(default_biosaxs))
@@ -286,11 +325,29 @@ class UserSetup(object):
             self.logger.info('Wrote JSON template file in: '+template_dir+'template.json')
             self.logger.info('JSON template points to: '+self.output_pipeline_file)
 
+    def setHplcSymLinkLocation(self, location=None):
+        try:
+            old_location = self.redis.get('hplc_symlink')
+            try:
+                os.unlink(old_location)
+                self.logger.info('Unlinked old symlink location')
+            except:
+                self.logger.info('Did not unlink old symlink location')
+            if os.path.isdir(os.path.split(location)[0]):
+                self.redis.set('hplc_symlink', location)
+                self.logger.info('Setting hplc_symlink to: '+location)
+        except:
+            self.logger.error('Failed to set hplc symlink to: '+str(location))
+
+    def getHplcSymLink(self):
+        return self.redis.get('hplc_symlink')
+
     def MakeHplcSymLink(self):
         #Set some parameters
         user = 'b21user'
         host = 'localhost'
-        target_dir = '/dls/b21/data/2018/cm19678-3/processing/hplc_forwarding_link'
+        #target_dir = '/dls/b21/data/2019/cm22953-2/processing/hplc_forwarding_link'
+        target_dir = self.getHplcSymLink()
         source_dir = self.visit_directory+'hplc/saxs'
 
         #If you are already b21user you can go ahead directly
@@ -299,7 +356,8 @@ class UserSetup(object):
             try:
                 if os.path.islink(target_dir):
                     os.unlink(target_dir)
-                os.symlink(source_dir, target_dir)
+                os.chdir(os.path.split(target_dir)[0])
+                os.symlink(os.path.relpath(source_dir), os.path.split(target_dir)[1])
             except:
                 self.logger.error('Failed to make the HPLC symlink, prob a permissions issue')
         #If you are not b21user you need to switch
@@ -331,7 +389,7 @@ class UserSetup(object):
                 else:
                     self.logger.error('Failed to unlink the old dir, will try to link the new one anyway.')
                 self.logger.info('Linking the new directory')
-                command = 'ln -s '+source_dir+' '+target_dir
+                command = 'cd '+os.path.split(target_dir)[0]+';ln -s '+os.path.relpath(source_dir)+' '+os.path.split(target_dir)[1]
                 chan = client.get_transport().open_session()
                 chan.exec_command(command)
                 if chan.recv_exit_status() == 0:
@@ -411,21 +469,24 @@ if __name__ == '__main__':
     optional.add_option("-a", "--abs_cal", action="store", type="float", dest="abs_cal", default=None, help="Multiplier for setting absolute calibration, default is to leave it as is.")
     optional.add_option("-o", "--output_file", action="store", type="string", dest="output_file", default=None, help="The location of the pipeline nxs output file. The default is into current visit processing dir with name processing_pipeline_<todays date>.nxs ")
     optional.add_option("-m", "--mq", action="store_true", dest="activemq", default=False, help="Turn on activeMQ communication, default is False.")
-
+    optional.add_option("-l", "--hplc_link", action="store", type="string", dest="hplc_link", default="None", help="Set a new location for the HPLC symlink.")
     parser.add_option_group(required)
     parser.add_option_group(optional)
     (options, args) = parser.parse_args()
 
     if options.visit_id == "None":
         sys.exit('Useage: user_setup.py -v <visit id>')
-
+    
 
     job = UserSetup()
     if job.SetVisit(options.visit_id):
         job.CopyIcons()
         job.CopyScatter()
+        job.CopyBSA()
         job.WriteProcessingPipeline(output_file = options.output_file, low_q = options.lo_q, high_q = options.hi_q, abs_cal = options.abs_cal)
         job.WriteJsonTemplate(activeMQ=options.activemq)
+        if not options.hplc_link == 'None':
+            job.setHplcSymLinkLocation(options.hplc_link)
         job.MakeHplcSymLink()
         job.WriteDefaultXmlFiles()
         job.logger.info('Finished successfully')
