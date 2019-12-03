@@ -13,6 +13,7 @@ from gda.scan import StaticScan
 from tfgsetup import fs
 from time import sleep
 import logging
+import pickle
 import gda.factory.Finder
 import sys
 from cStringIO import StringIO
@@ -28,9 +29,8 @@ class HPLC(object):
     The class has various functions to check shutters etc on the 
     beamline as well as measuring the data.
     """
-    
+    __version__ = '1.03'
     def __init__(self, filename):
-        self.__version__ = '1.02'
         self.hplcFile = filename
         self.bean = HplcSessionBean.createFromXML(filename)
         finder = gda.factory.Finder.getInstance()
@@ -44,6 +44,8 @@ class HPLC(object):
         self.ncddetectors = finder.listAllLocalObjects("uk.ac.gda.server.ncd.detectorsystem.NcdDetectorSystem")[0]
         self.jsf = JythonServerFacade.getInstance()
         self.readout_time = 0.1
+        self.skip_checks = True
+
         #CREATE A LOGGER
         self.logger = logging.getLogger('HPLC')
         self.logger.setLevel(logging.INFO)
@@ -223,7 +225,10 @@ class HPLC(object):
     def preRunCheck(self):
         status = False
         message = "HPLC run aborted due to: "
-        if not self.getMachineStatus():
+        if self.skip_checks:
+            message = 'Skipping all pre-run checks'
+            status = True
+        elif not self.getMachineStatus():
             message += 'Machine is down'
         elif not self.getSafetyShutter():
             message += 'Safety shutter is closed'
@@ -239,21 +244,23 @@ class HPLC(object):
     def run(self, processing=True):
         try:
             self.setGdaStatus('HPLC')
-            if not self.getSafetyShutter():
-                if self.getSearchStatus():
-                    #self.armFastValve()
-                    self.setSafetyShutter('Open')
-                else:
-                    self.logger.error('Search the hutch you crazy fool!')
-                    raise EnvironmentError('The script terminated early because the hutch is not searched.')
+            if self.skip_checks:
+                self.logger.info('Skipping checks for safety shutter, HPLC valve and fast shutter')
+            else:
+                if not self.getSafetyShutter():
+                    if self.getSearchStatus():
+                        self.setSafetyShutter('Open')
+                    else:
+                        self.logger.error('Search the hutch you crazy fool!')
+                        raise EnvironmentError('The script terminated early because the hutch is not searched.')
                 
-            if not self.getHplcValve():
-                self.logger.error('The HPLC static/flow valve is in static position, this may be caused by a loss of vacuum in the sample section.')
-                raise EnvironmentError('The script terminated early because the HPLC static/flow valve is in the static position')
+                if not self.getHplcValve():
+                    self.logger.error('The HPLC static/flow valve is in static position, this may be caused by a loss of vacuum in the sample section.')
+                    raise EnvironmentError('The script terminated early because the HPLC static/flow valve is in the static position')
             
-            if self.getFastShutter():
-                self.logger.info('Fast shutter was open, closing it so the tfg can take care of it during collection')
-                self.setFastShutter('Close')
+                if self.getFastShutter():
+                    self.logger.info('Fast shutter was open, closing it so the tfg can take care of it during collection')
+                    self.setFastShutter('Close')
                 
             self.setEnvironment('HPLC')
             self.setSampleType('sample+buffer')
@@ -273,7 +280,6 @@ class HPLC(object):
                 
                 self.logger.info('---- STARTING RUN '+str(i+1)+' of '+str(len(self.bean.measurements))+': SAMPLE: '+b.getSampleName()+' ----')
                 exposure_time = b.getTimePerFrame()
-                pre_run_delay = 120
                 
                 #GET THE RUN TIME
                 try:
@@ -281,17 +287,35 @@ class HPLC(object):
                 except:
                     self.logger.error('The run time of the experiment must be an integer and is in minutes, using 30 mins as a default')
                     runtime = 32
-                number_of_images = self.NumberOfImages(runtime, exposure_time)
-                
-                
+
                 #Set up run parameters
                 self.setTitle(b.getSampleName())
                 
-                #Get the inject signal
-                self.logger.info('Waiting for injection signal from HPLC')
+                #Work out if we missed an injection signal
+                try:
+                    last_injection = pickle.loads(eval(subprocess.check_output(['/dls/science/groups/b21/B21/get_last_injection.py'], shell=True).decode('utf-8').rstrip()))
+                    time_since_injection = (datetime.now()-last_injection).seconds
+                    if time_since_injection < (runtime*60):
+                        runtime = ((runtime*60.0) - (datetime.now()-last_injection).seconds ) / 60.0
+                        number_of_images = self.NumberOfImages(runtime, exposure_time)
+                        pre_run_delay = 0
+                        found_signal = True
+                        self.logger.info('Missed injection signal, run time adjusted to '+str(runtime)+' mins')
+                    else:
+                        number_of_images = self.NumberOfImages(runtime, exposure_time)
+                        pre_run_delay = 120
+                        found_signal = False
+                        self.logger.info('We have not missed an injection, will wait for one')
+                except:
+                    number_of_images = self.NumberOfImages(runtime, exposure_time)
+                    pre_run_delay = 120
+                    found_signal = False
+                    self.logger.error('Failed to get the time of last hplc injection, will try waiting for one')
+                    
+                
+                #wait for injection signal
                 starttime = datetime.now()
                 elapsed_time = 0
-                found_signal = False
                 while elapsed_time < pre_run_delay:
                     if self.getInjectSignal():
                         self.logger.info('Found injection signal')
@@ -300,9 +324,11 @@ class HPLC(object):
                     else:
                         elapsed_time = (datetime.now() - starttime).seconds
                     sleep(0.1)
+
                 if not found_signal:
                     self.logger.info('Did not find the inject signal, will proceed anyway.')
                     self.sendSms(str(i+1)+' of '+str(len(self.bean.measurements))+': missed the injection signal')
+
                 #Start the data collection
                 self.logger.info('Starting data collection')
                 for index,run in enumerate(number_of_images):
