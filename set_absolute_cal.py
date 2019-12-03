@@ -28,8 +28,8 @@ class AbsCal(object):
         #set some parameters
         self.water = None
         self.empty = None
-        self.qmin = 0.34 # window for calculating
-        self.qmax = 0.36 # scattering
+        self.qmin = 0.31 # window for calculating
+        self.qmax = 0.33 # scattering
         self.target = 0.0163
         self.master_pipeline = '/dls_sw/b21/scripts/TEMPLATES/current_pipeline.nxs'
 
