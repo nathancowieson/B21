@@ -24,11 +24,11 @@ SAMPLE_HOLD = True
 DELAY_REGEX = re.compile('delay:\s*(\d+)')
 
 class BSSCRun:
+    __version__ = '1.02'
+    simulate = False
     def __init__(self, beanFile):
-        self.__version__ = '1.02'
         finder = gda.factory.Finder.getInstance()
         find = finder.find
-        self.simulate = False
         self.holdsample = SAMPLE_HOLD
         self.samplevolume = 35
         self.beanFile = beanFile
@@ -357,7 +357,7 @@ class BSSCRun:
                 self.setGdaStatus('BSSC')
                 if not self.getMachineStatus():
                     self.sendSms("BSSC script stopped due to beam dump")
-                    self.logger.error('Paused script due to beam dump. Hit play to resume')
+                    print 'Paused script due to beam dump. Hit play to resume'
                     self.jsf.pauseCurrentScript()
                     self.setGdaStatus('Idle')
                 pause()
