@@ -30,6 +30,7 @@ class HPLC(object):
     beamline as well as measuring the data.
     """
     __version__ = '1.03'
+    skip_checks = False
     def __init__(self, filename):
         self.hplcFile = filename
         self.bean = HplcSessionBean.createFromXML(filename)
@@ -44,7 +45,6 @@ class HPLC(object):
         self.ncddetectors = finder.listAllLocalObjects("uk.ac.gda.server.ncd.detectorsystem.NcdDetectorSystem")[0]
         self.jsf = JythonServerFacade.getInstance()
         self.readout_time = 0.1
-        self.skip_checks = True
 
         #CREATE A LOGGER
         self.logger = logging.getLogger('HPLC')
@@ -297,21 +297,19 @@ class HPLC(object):
                     time_since_injection = (datetime.now()-last_injection).seconds
                     if time_since_injection < (runtime*60):
                         runtime = ((runtime*60.0) - (datetime.now()-last_injection).seconds ) / 60.0
-                        number_of_images = self.NumberOfImages(runtime, exposure_time)
                         pre_run_delay = 0
                         found_signal = True
                         self.logger.info('Missed injection signal, run time adjusted to '+str(runtime)+' mins')
                     else:
-                        number_of_images = self.NumberOfImages(runtime, exposure_time)
                         pre_run_delay = 120
                         found_signal = False
                         self.logger.info('We have not missed an injection, will wait for one')
                 except:
-                    number_of_images = self.NumberOfImages(runtime, exposure_time)
                     pre_run_delay = 120
                     found_signal = False
-                    self.logger.error('Failed to get the time of last hplc injection, will try waiting for one')
-                    
+                    self.logger.error('Failed to get the time of last hplc injection, check redis on ws005!')
+                finally:
+                    number_of_images = self.NumberOfImages(runtime, exposure_time)
                 
                 #wait for injection signal
                 starttime = datetime.now()
