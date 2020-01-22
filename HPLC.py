@@ -15,6 +15,7 @@ from time import sleep
 import logging
 import pickle
 import gda.factory.Finder
+import re
 import sys
 from cStringIO import StringIO
 from math import ceil
@@ -266,6 +267,7 @@ class HPLC(object):
             self.setSampleType('sample+buffer')
             
             self.isError = False
+            previous_runtime = 0
             for i, b in enumerate(self.bean.measurements):
                 pause()
                 my_check = self.preRunCheck()
@@ -295,7 +297,10 @@ class HPLC(object):
                 try:
                     last_injection = pickle.loads(eval(subprocess.check_output(['/dls/science/groups/b21/B21/get_last_injection.py'], shell=True).decode('utf-8').rstrip()))
                     time_since_injection = (datetime.now()-last_injection).seconds
-                    if time_since_injection < (runtime*60):
+                    if re.match('no check missed injection',b.getComment()):
+                        time_since_injection = 1E8
+                        self.logger.error('Setting time since last injection to 1E8')
+                    if time_since_injection < (previous_runtime*60):
                         runtime = ((runtime*60.0) - (datetime.now()-last_injection).seconds ) / 60.0
                         pre_run_delay = 0
                         found_signal = True
@@ -310,7 +315,11 @@ class HPLC(object):
                     self.logger.error('Failed to get the time of last hplc injection, check redis on ws005!')
                 finally:
                     number_of_images = self.NumberOfImages(runtime, exposure_time)
-                
+                previous_runtime = runtime
+                if re.match('skip delay',b.getComment()):
+                    pre_run_delay = 0
+                    self.logger.info('Skipping pre run delay because of comment')
+
                 #wait for injection signal
                 starttime = datetime.now()
                 elapsed_time = 0
