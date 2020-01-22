@@ -3,6 +3,9 @@ from java.util import HashMap
 from gda.data import PathConstructor
 import gda.factory.Finder
 from uk.ac.gda.devices.bssc.beans import BSSCSessionBean
+from uk.ac.diamond.daq.concurrent import Async
+from java.util.concurrent.TimeUnit import SECONDS
+from java.util.concurrent import Callable
 from gda.data.metadata import GDAMetadataProvider
 import gda.jython.commands.ScannableCommands
 from gda.jython import InterfaceProvider
@@ -22,6 +25,13 @@ import re
 SAMPLE_HOLD = True
 
 DELAY_REGEX = re.compile('delay:\s*(\d+)')
+class Call(Callable):
+    def __init__(self, method, *a, **kw):
+        self.method = method
+        self.args = a
+        self.kw = kw
+    def call(self):
+        return self.method(*self.args, **self.kw)
 
 class BSSCRun:
     __version__ = '1.02'
@@ -194,14 +204,14 @@ class BSSCRun:
         return scan.getDataWriter().getCurrentFileName()
 
     def expose(self, duration, move=False):
-        
         if move:
             print "Moving the sample during collection"
             speed = 1
             push_volume = self.samplevolume-7
-            taskid = self.bssc.push(push_volume, 1)
+            push_delay = 3
+            taskid = Async.schedule(Call(lambda: self.bssc.push(push_volume, 1)), push_delay, SECONDS)
             filename = self.doTheScan(self.scannables)
-            self.monitorAsynchronousMethod(taskid)
+            self.monitorAsynchronousMethod(taskid.get())
         else:
             print "Sample static during collection"
             filename = self.doTheScan(self.scannables)
