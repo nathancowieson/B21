@@ -111,7 +111,12 @@ class epicsDaemon(object):
     def prepareForHutchOpen(self):
         self.logger.debug('Preparing for hutch opening')
         try:
-            self.v33.reset_interlocks()
+            tries = 0
+            while not self.v33.get('ILKSTA') == 1 or tries > 4:
+                self.logger.debug(f'Try {tries+1} of 5 to reset V33 interlocks')
+                self.v33.reset_interlocks()
+                tries += 1
+                sleep(self.dwell_time)
             self.v33.open()
         except:
             self.logger.error('prepareForHutchOpen function threw an error')
