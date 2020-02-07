@@ -207,11 +207,15 @@ class BSSCRun:
         if move:
             print "Moving the sample during collection"
             speed = 1
-            push_volume = self.samplevolume-7
+            push_volume = self.samplevolume-10
             push_delay = 3
-            taskid = Async.schedule(Call(lambda: self.bssc.push(push_volume, 1)), push_delay, SECONDS)
+            #taskid = Async.schedule(Call(lambda: self.bssc.push(push_volume, 1)), push_delay, SECONDS)
+            taskid = self.bssc.pull(3, 1)
+            self.monitorAsynchronousMethod(taskid)
+            taskid = self.bssc.push(push_volume+3, 1)
             filename = self.doTheScan(self.scannables)
-            self.monitorAsynchronousMethod(taskid.get())
+            #self.monitorAsynchronousMethod(taskid.get())
+            self.monitorAsynchronousMethod(taskid)
         else:
             print "Sample static during collection"
             filename = self.doTheScan(self.scannables)
