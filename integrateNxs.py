@@ -38,10 +38,11 @@ class integrateNxs(object):
         #SETUP LOG
         self.logger = logger = logging.getLogger('integrateNxs')
         self.logger.setLevel(logging.INFO)
-        formatter = logging.Formatter('%(asctime)s: %(levelname)s: %(module)s: %(message)s',"[%Y-%m-%d %H:%M:%S]")
-        streamhandler = logging.StreamHandler()
-        streamhandler.setFormatter(formatter)
-        self.logger.addHandler(streamhandler)
+        if len(self.logger.handlers) == 0:
+            formatter = logging.Formatter('%(asctime)s: %(levelname)s: %(module)s: %(message)s',"[%Y-%m-%d %H:%M:%S]")
+            streamhandler = logging.StreamHandler()
+            streamhandler.setFormatter(formatter)
+            self.logger.addHandler(streamhandler)
         self.logger.info('started a new nxs file integration job')
 
     def setCores(self, cores=1):
@@ -81,7 +82,7 @@ class integrateNxs(object):
             try:
                 self.visit_directory = os.path.split(os.path.realpath(self.nxsfile))[0]
                 if os.path.isdir(self.visit_directory+'/processing'):
-                    self.output_directory = self.visit_directory+'/processing/'
+                    self.output_directory = self.visit_directory+'/processing/reprocessed/'
                     self.logger.info('Set output directory to: '+self.output_directory)
                     self.output_nxs_file = self.output_directory+os.path.splitext(os.path.split(self.nxsfile)[-1])[0]+'_processing.nxs'
                     return True
@@ -95,8 +96,12 @@ class integrateNxs(object):
     def getVisitDirectory(self):
         return self.visit_directory
         
-    def setProcessingPipeline(self):
+    def setProcessingPipeline(self, pipeline=None):
         try:
+            if pipeline:
+                if os.path.isfile(pipeline) and pipeline[-4:] == '.nxs':
+                    self.pipeline_file = os.path.abspath(pipeline)
+                    return True
             if not self.output_directory:
                 error_message = 'No output directory, needed to get processing pipeline'
                 self.logger.error(error_message)
@@ -160,7 +165,7 @@ class integrateNxs(object):
             'processingPath': self.working_pipeline_file,
             'outputFilePath': self.output_nxs_file,
             'deleteProcessingFile': False,
-            'datasetPath': '/entry1/detector',
+            'datasetPath': '/entry1/detector/data',
             'numberOfCores': self.cores,
             'xmx': 1024
             }
@@ -207,24 +212,29 @@ if __name__ == '__main__':
     required.add_option("-n", "--nxs_file", action="store", type="string", dest="nxsfile", default="None", help="The nxs file you want to integrate.")
     optional = OptionGroup(parser, "Optional Arguments")
     optional.add_option("-l", "--local", action="store_true", dest="local", default=False, help="If included the nxs file will integrate on the local machine, default is to run on ws005.")
-
+    optional.add_option("-p", "--pipeline", action="store", type="string", dest="pipeline", default=None, help="Specify a pipeline.nxs file to use, default is to use the one in the processing dir that predates the file to process")
     parser.add_option_group(required)
     parser.add_option_group(optional)
     (options, args) = parser.parse_args()
+    nxsfiles = [options.nxsfile]
+    for nxsfile in args:
+        if os.path.isfile(nxsfile) and nxsfile[-4:] == '.nxs':
+            nxsfiles.append(nxsfile)
 
     if options.nxsfile == "None":
         sys.exit('Useage: integrateNxs.py -n nxs_file.nxs')
 
     if options.local:
         job = integrateNxs()
-        if job.setNxsFile(options.nxsfile):
-            if job.setVisitDirectory():
-                if job.setProcessingPipeline():
-                    if job.writeJsonFile():
-                        if job.createTempPipeline():
-                            job.runDawn()
-                            job.cleanUp()
-                            job.logger.info('FINISHED NORMALLY')
+        for nxsfile in nxsfiles:
+            if job.setNxsFile(nxsfile):
+                if job.setVisitDirectory():
+                    if job.setProcessingPipeline(options.pipeline):
+                        if job.writeJsonFile():
+                            if job.createTempPipeline():
+                                job.runDawn()
+                                job.cleanUp()
+        job.logger.info('FINISHED NORMALLY')
 
     else:
         mylogger = logging.getLogger('remoteIntegrate')
