@@ -151,6 +151,7 @@ class BSSCRun:
         while self.bssc.isTaskRunning(taskid):
             time.sleep(0.2)
         try:
+            time.sleep(0.2)#attempt to fix a "Command Overflow" error
             info = self.bssc.checkTaskResult(taskid)
         except:
             self.reportProgress("ABORT -- robot operation failed : %s " % sys.exc_info()[0])
