@@ -1,5 +1,8 @@
 #!/bin/bash
 for nxsfile in "$@"
 do
-h5dump -d /entry1/title/ $nxsfile | awk -v MYFILENAME=$nxsfile '/\(0\)/ {$1=MYFILENAME ": "; print; exit}'
+TITLE=`/dls_sw/prod/tools/RHEL7-x86_64/defaults/bin/h5dump -d /entry1/title/ $nxsfile 2> /dev/null | awk '/\(0\)/ {print; exit}' | cut -d: -f2`
+TYPE=`/dls_sw/prod/tools/RHEL7-x86_64/defaults/bin/h5dump -d /entry1/environment/type $nxsfile 2> /dev/null | awk '/\(0\)/ {print $2; exit}'`
+NUMBER=`/dls_sw/prod/tools/RHEL7-x86_64/defaults/bin/h5dump -H -d /entry1/detector/data/ $nxsfile 2> /dev/null | awk -F'[,]' '/DATASPACE/ {print $2; exit}'`
+echo $nxsfile: $TITLE,$TYPE,$NUMBER frames
 done
