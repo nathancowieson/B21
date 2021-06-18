@@ -10,6 +10,7 @@ from gda.data.metadata import GDAMetadataProvider
 from gda.jython.commands.GeneralCommands import pause
 from gda.jython import JythonServerFacade
 from gda.scan import StaticScan
+import gdaserver
 from tfgsetup import fs
 from time import sleep
 import logging
@@ -42,8 +43,8 @@ class HPLC(object):
         self.sample_type = find('sample_type')
         self.sampleName = find("samplename")
         self.environment = find("sample_environment")
-        self.tfg = finder.listAllLocalObjects("gda.device.Timer")[0]
-        self.ncddetectors = finder.listAllLocalObjects("uk.ac.gda.server.ncd.detectorsystem.NcdDetectorSystem")[0]
+        self.tfg = gdaserver.Tfg
+        self.ncddetectors = find('ncddetectors')#finder.listAllLocalObjects("uk.ac.gda.server.ncd.detectorsystem.NcdDetectorSystem")[0]
         self.jsf = JythonServerFacade.getInstance()
         self.readout_time = 0.1
 
@@ -106,7 +107,7 @@ class HPLC(object):
             fv1(3.0)
 
     def sendSms(self, message=""):
-        fedids = {'Nathan': 'xaf46449', 'Nikul': 'rvv47355', 'Rob': 'xos81802', 'Katsuaki': 'vdf31527'}
+        fedids = {'Nathan': 'xaf46449', 'Nikul': 'rvv47355', 'Rob': 'xos81802', 'Katsuaki': 'vdf31527', 'Charlotte': 'nue65926'}
         for key in fedids.keys():
             subprocess.call(['/dls_sw/prod/tools/RHEL6-x86_64/defaults/bin/dls-sendsms.py', fedids[key], message])
         self.logger.info('Sent an SMS')
@@ -264,7 +265,7 @@ class HPLC(object):
                     self.setFastShutter('Close')
                 
             self.setEnvironment('HPLC')
-            self.setSampleType('sample+buffer')
+            self.setSampleType('sample')
             
             self.isError = False
             previous_runtime = 0
@@ -345,10 +346,8 @@ class HPLC(object):
                 self.logger.info('Finished collecting '+b.getSampleName())
             self.setSafetyShutter('Close')
             if self.isError:
-                self.setGdaStatus('Idle')
                 self.logger.error('SCRIPT WAS TERMINATED PREMATURELY')
             else:
-                self.setGdaStatus('Idle')
                 self.logger.info('SCRIPT FINISHED NORMALLY')
             #namespace:
             #b.getLocation().getRow()
@@ -363,9 +362,9 @@ class HPLC(object):
             #b.getUsername()
             #JythonScriptProgressProvider.sendProgress(100*i/float(len(self.bean.measurements)))
         except:
-            self.setGdaStatus('Idle')
             self.logger.error('SCRIPT TERMINATED IN ERROR')
         finally:
-            if not self.getGdaStatus() == 'Idle':
-                self.logger.error('SCRIPT TERMINATED IN ERROR')
+            self.setEnvironment('Manual')
+            self.setSampleType('none')
+            self.getGdaStatus() == 'Idle'
 
