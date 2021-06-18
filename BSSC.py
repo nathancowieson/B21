@@ -1,6 +1,6 @@
 import datetime, time, sys, os
 from java.util import HashMap
-from gda.data import PathConstructor
+#from gda.data import PathConstructor
 import gda.factory.Finder
 from uk.ac.gda.devices.bssc.beans import BSSCSessionBean
 from uk.ac.diamond.daq.concurrent import Async
@@ -16,6 +16,7 @@ from tfgsetup import fs
 from cStringIO import StringIO
 from gdascripts.pd.epics_pds import DisplayEpicsPVClass, SingleEpicsPositionerClass
 import gdaserver
+from gdaserver import Tfg as tfg
 import uuid
 import json
 import subprocess
@@ -43,11 +44,11 @@ class BSSCRun:
         self.samplevolume = 35
         self.beanFile = beanFile
         self.bean = BSSCSessionBean.createFromXML(beanFile)
-        self.bssc = finder.listAllLocalObjects("uk.ac.gda.devices.bssc.BioSAXSSampleChanger")[0]
-        self.tfg = finder.listAllLocalObjects("gda.device.Timer")[0]
+        self.bssc = find('bssc')
+        self.tfg = gdaserver.Tfg
         self.jsf = JythonServerFacade.getInstance()
-        self.detector = finder.listAllLocalObjects("uk.ac.gda.server.ncd.detectorsystem.NcdDetectorSystem")[0]
-        self.shutter = find("shutter")
+        self.detector = find('ncddetectors')
+        self.shutter = gdaserver.shutter
         self.bsscscannable = find("bsscscannable")
         self.processing = find("bssc_proc")
         #self.energy = float(find("dcm_energy").getPosition())
@@ -114,11 +115,13 @@ class BSSCRun:
             fv1(3.0)
 
     def sendSms(self, message=""):
-        fedids = {'Nathan': 'xaf46449', 'Nikul': 'rvv47355', 'Rob': 'xos81802', 'Katsuaki': 'vdf31527'}
+        fedids = {'Nathan': 'xaf46449', 'Nikul': 'rvv47355', 'Rob': 'xos81802', 'Katsuaki': 'vdf31527', 'Charlotte' : 'nue65926'}
         for key in fedids.keys():
             subprocess.call(['/dls_sw/prod/tools/RHEL6-x86_64/defaults/bin/dls-sendsms.py', fedids[key], message])
 
     def getMachineStatus(self):
+        if self.simulate:
+            return True
         try:
             machine_status.getPosition()
         except:
@@ -396,11 +399,11 @@ class BSSCRun:
                 self.bssc.setViscosityLevel("high")
                 self.clean()
             self.exportFinalBeans()
-            self.sample_environment('Manual')
-            self.sample_type('sample')
         finally:
             self.addExperimentDefinitionToNxs(False)
             self.setGdaStatus('Idle')
+            self.setEnvironment('Manual')
+            self.setSampleType('none')
             print 'BSSC SCRIPT FINISHED NORMALLY'
 
     def exportFinalBeans(self):
@@ -410,7 +413,9 @@ class BSSCRun:
         fname = self.beanFile.split(os.path.sep)[-1].rsplit('.', 1)[0]
         now = datetime.datetime.now().strftime('_%Y%m%d_%H%M%S')
 
-        user_visit = InterfaceProvider.getBatonStateProvider().getBatonHolder().getVisitID()
+        user_visit = gdaserver.visit.getMetadataValue()
+        #user_visit = InterfaceProvider.getBatonStateProvider().getBatonHolder().getVisitID()
+        PathConstructor = InterfaceProvider.getPathConstructor()
         prop = PathConstructor.getDefaultPropertyName()
         path = PathConstructor.createFromProperty(prop, HashMap({'visit': user_visit}))
 
