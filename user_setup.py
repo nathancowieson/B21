@@ -38,7 +38,8 @@ class UserSetup(object):
     def __init__(self):
         #set some parameters
         self.visit_id = None
-        self.visit_directory = '/dls/b21/data/'+str(datetime.now().year)+'/'
+        self.year = str(datetime.now().year)
+        self.visit_directory = '/dls/b21/data/'+self.year+'/'
         self.username = getpass.getuser()
         self.home_directory = os.path.expanduser("~")+'/'
         self.template_dir = '/dls_sw/b21/scripts/TEMPLATES/'
@@ -54,7 +55,20 @@ class UserSetup(object):
         streamhandler = logging.StreamHandler()
         streamhandler.setFormatter(formatter)
         self.logger.addHandler(streamhandler)
-           
+
+    def set_year(self, year=None):
+        '''set the year to look for the visit folder in'''
+        self.logger.debug('the set_year method was called')
+        if type(year) == int:
+            self.year = str(year)
+            self.visit_directory = '/dls/b21/data/'+self.year+'/'
+            self.logger.debug('Set year to '+self.year)
+        else:
+            self.logger.error('set_year method requires an integer')
+
+    def get_year(self):
+        return self.year
+
     def SetVisit(self, visit):
         if str(visit) in os.listdir(self.visit_directory):
             self.visit_id = str(visit)
@@ -113,10 +127,8 @@ class UserSetup(object):
                 self.logger.info(os.path.split(launcher)[-1]+' is already on desktop')  
 
     def CopyScatter(self):
-        scatter_in = self.template_dir+'scatter3.jar'
-        scatter4_in = self.template_dir+'scatterIV.jar'
-        scatter_out = self.visit_directory+'processing/scatter3.jar'
-        scatter4_out = self.visit_directory+'processing/scatterIV.jar'
+        scatter_in = self.template_dir+'scatterIV.jar'
+        scatter_out = self.visit_directory+'processing/scatterIV.jar'
         scatter_config = self.visit_directory+'processing/scatter.config'
         config_contents = [
             datetime.now().strftime('#%a %b %d %H:%M:%S BST %Y'),
@@ -132,23 +144,14 @@ class UserSetup(object):
         if os.path.isfile(scatter_in):
             if not os.path.isfile(scatter_out):
                 copyfile(scatter_in, scatter_out)
-                self.logger.info('copied scatter3.jar to the processing directory')
+                self.logger.info('copied scatterIV.jar to the processing directory')
                 
             else:
                 copyfile(scatter_in, scatter_out)
                 self.logger.info('Replaced a version of scatter in the processing directory')
         else:
             self.logger.error('did not copy scatter to the processing directory, could not find jar file in /dls_sw/b21/scripts/TEMPLATES')
-        if os.path.isfile(scatter4_in):
-            if not os.path.isfile(scatter4_out):
-                copyfile(scatter4_in, scatter4_out)
-                self.logger.info('copied scatterIV.jar to the processing directory')
-                
-            else:
-                copyfile(scatter4_in, scatter4_out)
-                self.logger.info('Replaced a version of scatterIV in the processing directory')
-        else:
-            self.logger.error('did not copy scatterIV to the processing directory, could not find jar file in /dls_sw/b21/scripts/TEMPLATES')
+
 
     def CopyBSA(self):
         bsa_in = self.template_dir+'BSA.pdb'
@@ -162,6 +165,24 @@ class UserSetup(object):
                 self.logger.info('BSA.pdb already exists in the processing dir.')
         else:
             self.logger.error('did not copy BSA.pdb to the processing directory, did not exist in /dls_sw/b21/scripts/TEMPLATES')
+
+    def CopyJupyterNotebook(self):
+        output_dir = self.visit_directory+'xml/templates/'
+        notebook_file = 'report.ipynb'
+        nbk_in = self.template_dir+notebook_file
+        nbk_out = output_dir+notebook_file
+
+        if not os.path.isdir(output_dir):
+            os.makedirs(output_dir)
+            
+        if os.path.isfile(nbk_in):
+            if not os.path.isfile(nbk_out):
+                copyfile(nbk_in, nbk_out)
+                self.logger.info('copied report.ipynb to the xml/template directory')
+            else:
+                self.logger.info('report.ipynb already exists in the xml/template dir.')
+        else:
+            self.logger.error('did not copy report.ipynb to the xml/template directory, did not exist in /dls_sw/b21/scripts/TEMPLATES')
 
     def GetCurrentProcessingFile(self):
         processing_file = self.template_dir+'current_pipeline.nxs'
@@ -199,8 +220,14 @@ class UserSetup(object):
         biosaxs_outfile = self.visit_directory+'xml/default.biosaxs'
         hplc_outfile = self.visit_directory+'xml/default.hplc'
 
-        default_biosaxs = [('measurement', [('location', [('plate', '2'), ('row', 'A'), ('column', '9')]), ('sampleName', 'my buffer'), ('concentration', '0.0'), ('viscosity', 'medium'), ('molecularWeight', '0.0'), ('buffer', 'true'), ('buffers', ''), ('yellowSample', 'true'), ('timePerFrame', '1.0'), ('frames', '21'), ('exposureTemperature', '15.0'), ('key', ''), ('mode', 'BS'), ('move', 'true'), ('sampleVolume', '35'), ('visit', self.visit_id), ('username', 'b21user')]), ('measurement', [('location', [('plate', '1'), ('row', 'A'), ('column', '1')]), ('sampleName', 'my sample'), ('concentration', '1.0'), ('viscosity', 'medium'), ('molecularWeight', '66.0'), ('buffer', 'false'), ('buffers', '2a9'), ('yellowSample', 'true'), ('timePerFrame', '1.0'), ('frames', '21'), ('exposureTemperature', '15.0'), ('key', ''), ('mode', 'BS'), ('move', 'true'), ('sampleVolume', '35'), ('visit', self.visit_id), ('username', 'b21user')])]
-        default_hplc = [('measurement', [('location', 'A1'), ('sampleName', 'my sample'), ('concentration', '5.0'), ('molecularWeight', '66.0'), ('timePerFrame', '3.0'), ('visit', self.visit_id), ('username', 'b21user'), ('comment', 'None'), ('buffers', '25 mM Tris pH 7.5, 200 mM NaCl'), ('mode', 'HPLC'), ('columnType', 'KW403'), ('duration', '32.0')])]
+        default_biosaxs = [
+            ('measurement',
+             [('location', [('plate', '2'), ('row', 'A'), ('column', '9')]), ('sampleName', 'my buffer'), ('viscosity', 'medium'), ('buffer', 'true'), ('buffers', ''), ('yellowSample', 'true'), ('timePerFrame', '1.0'), ('frames', '21'), ('exposureTemperature', '15.0'), ('key', ''), ('mode', 'BS'), ('delay', '0.0'), ('move', 'true'), ('sampleVolume', '35'), ('visit', self.visit_id), ('username', 'b21user'), ('concentration', '0.0'), ('molecularWeight', '0.0'), ('datafilename', '')]
+             ),
+            ('measurement', [
+                ('location', [('plate', '1'), ('row', 'A'), ('column', '1')]), ('sampleName', 'my sample'), ('viscosity', 'medium'), ('buffer', 'false'), ('buffers', '2a9'), ('yellowSample', 'true'), ('timePerFrame', '1.0'), ('frames', '21'), ('exposureTemperature', '15.0'), ('key', ''), ('mode', 'BS'), ('delay', '0.0'), ('move', 'true'), ('sampleVolume', '35'), ('visit', self.visit_id), ('username', 'b21user'), ('concentration', '0.0'), ('molecularWeight', '0.0'), ('datafilename', '')]
+         )]
+        default_hplc = [('measurement', [('sampleName', 'my sample'), ('concentration', '5.0'), ('molecularWeight', '66.0'), ('timePerFrame', '3.0'), ('visit', self.visit_id), ('username', 'b21user'), ('comment', 'None'), ('buffers', '25 mM Tris pH 7.5, 200 mM NaCl'), ('mode', 'HPLC'), ('columnType', 'KW403'), ('duration', '32.0'), ('delay', '90.0')])]
         myxml = xmlReadWrite()
         myxml.setOutputType('biosaxs')
         open(biosaxs_outfile, 'w').write(myxml.parseToXml(default_biosaxs))
@@ -301,6 +328,10 @@ class UserSetup(object):
         self.logger.info('Making xml/templates and processing/log directories')
         log_dir = self.visit_directory+'processing/log/'
         template_dir = self.visit_directory+'xml/templates/'
+        notebook_file = template_dir+'report.ipynb'
+
+
+
         for mydir in [log_dir, template_dir]:
             if not os.path.isdir(mydir):
                 os.makedirs(mydir)
@@ -316,7 +347,8 @@ class UserSetup(object):
                 "processingPath": self.output_pipeline_file,
                 "outputFilePath": "",
                 "deleteProcessingFile": 'false',
-                "datasetPath": "/entry1/detector/data"
+                "datasetPath": "/entry1/detector/data",
+                "notebook": notebook_file
                 }
             if activeMQ:
                 template_dict['publisherURI'] = 'tcp://b21-control:61616'
@@ -348,7 +380,7 @@ class UserSetup(object):
         host = 'localhost'
         #target_dir = '/dls/b21/data/2019/cm22953-2/processing/hplc_forwarding_link'
         target_dir = self.getHplcSymLink()
-        source_dir = self.visit_directory+'hplc/saxs'
+        source_dir = self.visit_directory+'processing/hplc/'
 
         #If you are already b21user you can go ahead directly
         if getpass.getuser() == user:
@@ -356,6 +388,8 @@ class UserSetup(object):
             try:
                 if os.path.islink(target_dir):
                     os.unlink(target_dir)
+                if not os.path.isdir(source_dir):
+                    os.mkdir(source_dir)
                 os.chdir(os.path.split(target_dir)[0])
                 os.symlink(os.path.relpath(source_dir), os.path.split(target_dir)[1])
             except:
@@ -467,6 +501,7 @@ if __name__ == '__main__':
     optional.add_option("-n", "--q_min", action="store", type="float", dest="lo_q", default=None, help="Set the low Q limit for the radial integration")
     optional.add_option("-x", "--q_max", action="store", type="float", dest="hi_q", default=None, help="Set the high Q limit for the radial integration")
     optional.add_option("-a", "--abs_cal", action="store", type="float", dest="abs_cal", default=None, help="Multiplier for setting absolute calibration, default is to leave it as is.")
+    optional.add_option("-y", "--year", action="store", type="int", dest="year", default=None, help="Manually set the year to look for the visit folder, default is current year.")
     optional.add_option("-o", "--output_file", action="store", type="string", dest="output_file", default=None, help="The location of the pipeline nxs output file. The default is into current visit processing dir with name processing_pipeline_<todays date>.nxs ")
     optional.add_option("-m", "--mq", action="store_true", dest="activemq", default=False, help="Turn on activeMQ communication, default is False.")
     optional.add_option("-l", "--hplc_link", action="store", type="string", dest="hplc_link", default="None", help="Set a new location for the HPLC symlink.")
@@ -479,10 +514,13 @@ if __name__ == '__main__':
     
 
     job = UserSetup()
+    if options.year:
+        job.set_visit(options.year)
     if job.SetVisit(options.visit_id):
         job.CopyIcons()
         job.CopyScatter()
         job.CopyBSA()
+        job.CopyJupyterNotebook()
         job.WriteProcessingPipeline(output_file = options.output_file, low_q = options.lo_q, high_q = options.hi_q, abs_cal = options.abs_cal)
         job.WriteJsonTemplate(activeMQ=options.activemq)
         if not options.hplc_link == 'None':
