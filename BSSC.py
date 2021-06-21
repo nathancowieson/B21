@@ -1,7 +1,8 @@
 import datetime, time, sys, os
 from java.util import HashMap
 #from gda.data import PathConstructor
-import gda.factory.Finder
+import gda.factory.Finder.find as find
+#import gda.factory.Finder
 from uk.ac.gda.devices.bssc.beans import BSSCSessionBean
 from uk.ac.diamond.daq.concurrent import Async
 from java.util.concurrent.TimeUnit import SECONDS
@@ -38,8 +39,8 @@ class BSSCRun:
     __version__ = '1.02'
     simulate = False
     def __init__(self, beanFile):
-        finder = gda.factory.Finder.getInstance()
-        find = finder.find
+        #finder = gda.factory.Finder.getInstance()
+        #find = finder.find
         self.holdsample = SAMPLE_HOLD
         self.samplevolume = 35
         self.beanFile = beanFile
@@ -71,7 +72,7 @@ class BSSCRun:
             print "running in simulation mode"
             self.scannables = [self.detector, self.bsscscannable]
         else:
-            self.cam = gda.factory.Finder.getInstance().find("bsaxscam")
+            self.cam = find("bsaxscam")
             self.scannables = [self.detector, self.bsscscannable, self.cam]
 
         currentVisit = GDAMetadataProvider.getInstance().getMetadataValue("visit")
