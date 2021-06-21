@@ -15,7 +15,8 @@ from tfgsetup import fs
 from time import sleep
 import logging
 import pickle
-import gda.factory.Finder
+#import gda.factory.Finder
+import gda.factory.Finder.find as find
 import re
 import sys
 from cStringIO import StringIO
@@ -36,8 +37,8 @@ class HPLC(object):
     def __init__(self, filename):
         self.hplcFile = filename
         self.bean = HplcSessionBean.createFromXML(filename)
-        finder = gda.factory.Finder.getInstance()
-        find = finder.find
+        #finder = gda.factory.Finder.getInstance()
+        #find = finder.find
         self.shutter = find('shutter')
         self.bsdiode = find('bsdiode')
         self.sample_type = find('sample_type')
@@ -68,10 +69,10 @@ class HPLC(object):
         GDAMetadataProvider.getInstance().setMetadataValue("title", title)
         
     def setSampleType(self, type='sample'):
-        if type in ['sample', 'sample+buffer', 'buffer']:
+        if type in self.sample_type.positionsList:
             self.sample_type(type)
         else:
-            self.logger.error('Sample type should be one of: sample, sample+buffer, buffer.')
+            self.logger.error('Invalid sample type')
             
     def setEnvironment(self, type='HPLC'):
         if type in ['BSSC', 'HPLC', 'Manual']:
