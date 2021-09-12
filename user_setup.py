@@ -1,10 +1,12 @@
-#!/dls/science/groups/b21/PYTHON/bin/python
+#!/dls/science/groups/b21/PYTHON3/bin/python
 '''
 Created on Dec 8th, 2016
+Last update May 4 2021
 
 @author: nathan
 '''
 import logging
+import numpy
 from optparse import OptionParser
 from optparse import OptionGroup
 import os
@@ -12,15 +14,18 @@ from datetime import datetime
 import sys
 import getpass
 import paramiko
+import re
 import redis
 import subprocess
 from glob import glob
 from shutil import copyfile
-from nexusformat import nexus as nx#import nxload, nxsave
+import h5py
 import json
 from epics import ca
 sys.path.insert(0, '/dls/science/groups/b21/B21')
 from XlsToGda import xmlReadWrite
+from reportlab.pdfgen.canvas import Canvas
+from reportlab.lib.pagesizes import A4
 
 class UserSetup(object):
     """Sets the currently logged in users directories for a visit
@@ -39,53 +44,143 @@ class UserSetup(object):
         #set some parameters
         self.visit_id = None
         self.year = str(datetime.now().year)
-        self.visit_directory = '/dls/b21/data/'+self.year+'/'
+        self.visit_directory = f'/dls/b21/data/{self.year}/'
         self.username = getpass.getuser()
-        self.home_directory = os.path.expanduser("~")+'/'
+        self.home_directory = f'{os.path.expanduser("~")}/'
         self.template_dir = '/dls_sw/b21/scripts/TEMPLATES/'
-        self.mask_file = self.template_dir+'current_mask.nxs'
-        self.calibration_file = self.template_dir+'current_calibration.nxs'
-        self.pipeline_file = self.template_dir+'current_pipeline.nxs'
+        self.mask_file = f'{self.template_dir}current_mask.nxs'
+        self.calibration_file = f'{self.template_dir}current_calibration.nxs'
+        self.pipeline_file = f'{self.template_dir}current_pipeline.nxs'
         self.output_pipeline_file = False
         self.redis = redis.StrictRedis(host='b21-ws005.diamond.ac.uk', port=6379, db=0)
         ###start a log file
         self.logger = logging.getLogger('UserSetup')
         self.logger.setLevel(logging.DEBUG)
-        formatter = logging.Formatter('%(asctime)s: %(levelname)s: %(module)s: %(message)s',"[%Y-%m-%d %H:%M:%S]")
-        streamhandler = logging.StreamHandler()
-        streamhandler.setFormatter(formatter)
-        self.logger.addHandler(streamhandler)
+        if len(self.logger.handlers) == 0:
+            formatter = logging.Formatter('%(asctime)s: %(levelname)s: %(module)s: %(message)s',"[%Y-%m-%d %H:%M:%S]")
+            streamhandler = logging.StreamHandler()
+            streamhandler.setFormatter(formatter)
+            self.logger.addHandler(streamhandler)
 
     def set_year(self, year=None):
         '''set the year to look for the visit folder in'''
         self.logger.debug('the set_year method was called')
         if type(year) == int:
             self.year = str(year)
-            self.visit_directory = '/dls/b21/data/'+self.year+'/'
-            self.logger.debug('Set year to '+self.year)
+            self.visit_directory = f'/dls/b21/data/{self.year}/'
+            self.logger.debug(f'Set year to {self.year}')
         else:
             self.logger.error('set_year method requires an integer')
 
     def get_year(self):
         return self.year
 
-    def SetVisit(self, visit):
+    def get_visit_stats(self, visit):
+        visit_stats = {
+            'visit': visit,
+            'visit_dir': '',
+            'start_time': 'null',
+            'end_time': datetime.now().strftime('%Y-%m-%d_%H:%M:%S'),
+            'first_file': 'null',
+            'last_file': 'null',
+            'total_exposure_time': 0,
+            'bssc_samples': 0,
+            'hplc_samples': 0,
+            'manual_samples': 0,
+            'median_file_gap': 0,
+            'longest_file_gap': 0
+            }
+        visit_dir = None
+        visit_dirs = [
+            f'{self.visit_directory}{visit}/',
+            f'/dls/b21/data/{str(int(self.get_year())-1)}/{visit}/'
+            ]
+        for vd in visit_dirs:
+            if os.path.isdir(vd):
+                visit_dir = vd
+                visit_stats['visit_dir'] = visit_dir
+                self.logger.debug('Found previous visit dir for get_visit_stats')
+                break
+        if visit_dir:
+            #Get time user_setup was run
+            pattern = visit_dir+'processing/processing_pipeline_*.nxs'
+            pipeline_files = glob(pattern)
+            pipeline_files.sort(key=os.path.getctime)
+            setup_time = datetime.fromtimestamp(os.path.getctime(pipeline_files[-1]))
+            visit_stats['start_time'] = setup_time.strftime('%Y-%m-%d_%H:%M:%S')
+
+            #Get first and last image time
+            pattern = visit_dir+'*.nxs'            
+            data_files = glob(pattern)
+            data_files.sort(key=os.path.getctime)
+            first_file = datetime.fromtimestamp(os.path.getctime(pipeline_files[0]))
+            visit_stats['first_file'] = first_file.strftime('%Y-%m-%d_%H:%M:%S')
+            last_file = datetime.fromtimestamp(os.path.getctime(pipeline_files[-1]))
+            visit_stats['last_file'] = last_file.strftime('%Y-%m-%d_%H:%M:%S')
+
+            #Gaps between files
+            gaps = []
+            for i,f in enumerate(data_files):
+                if i > 0:
+                    gaps.append(os.path.getctime(data_files[i])-os.path.getmtime(data_files[i-1]))
+            ngaps = numpy.array(gaps)
+            
+            visit_stats['median_file_gap'] = numpy.median(ngaps)
+            visit_stats['longest_file_gap'] = ngaps.max()
+
+            #Divide nxs files by type
+            for f in data_files:
+                with h5py.File(f, "r") as fh:
+                    try:
+                        e = fh['/entry1/environment/type'][()][0].decode('utf-8')
+                        if e == 'BSSC':
+                            visit_stats['bssc_samples'] += 1
+                        elif e == 'HPLC':
+                            visit_stats['hplc_samples'] += 1
+                        else:
+                            visit_stats['manual_samples'] += 1
+                    except:
+                        self.logger.error(f'Could not get type from nxs file: {f}')
+                        visit_stats['manual_samples'] += 1
+                    try:
+                        visit_stats['total_exposure_time'] += fh['entry1/instrument/Scalers/count_time'][...].sum()
+                    except:
+                        self.logger.debug('Failed to get exposure time from nxs, prob a scan')
+                        visit_stats['total_exposure_time'] += 20
+            return visit_stats
+
+    def getVisit(self):
+        try:
+            chid = ca.create_channel('BL21B-EA-EXPT-01:ID', connect=True)
+            visit = ca.get(chid)
+            pattern = '[cmisnl][wmbxnt][0-9]{5}-[0-9]+'
+            if re.match(pattern, visit):
+                self.logger.debug('Found the current visit from epics')
+                return visit
+            else:
+                self.logger.error('Visit from epics has an expected format')
+                return visit
+        except:
+            self.logger.error('Could not get visit from epics')
+            return False
+
+    def setVisit(self, visit):
         if str(visit) in os.listdir(self.visit_directory):
             self.visit_id = str(visit)
             self.visit_directory = self.visit_directory+self.visit_id+'/'
-            self.logger.info('Set the visit to: '+self.visit_id)
+            self.logger.info(f'Set the visit to: {self.visit_id}')
             command = ['groups', self.username]
 
             my_env = os.environ.copy()
             child = subprocess.Popen(command, env=my_env, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-            users_experiments = child.communicate()[0].split()[1:]
+            users_experiments = [x.decode('utf-8') for x in child.communicate()[0].split()[1:]]
             exit_status = child.returncode
             if 'b21_staff' in users_experiments or self.username in users_experiments:
                 self.logger.info('Current user has permissions on this visit')
                 try:
                     ###connect to epics
-                    self.chid = ca.create_channel('BL21B-EA-EXPT-01:ID', connect=True)
-                    ca.put(self.chid, self.visit_id)
+                    chid = ca.create_channel('BL21B-EA-EXPT-01:ID', connect=True)
+                    ca.put(chid, self.visit_id)
                     self.logger.info('Set the new visit in epics for the autoprocessing to pick up')
                     return True
                 except:
@@ -102,18 +197,18 @@ class UserSetup(object):
                             return True
                         else:
                             self.logger.error('Failed to put visit ID to epics, the processing pypline will not work')
-                            self.logger.error('To fix this open a terminal window on another workstation and run the command: caput BL21B-EA-EXPT-01:ID '+self.visit_id)
+                            self.logger.error(f'To fix this open a terminal window on another workstation and run the command: caput BL21B-EA-EXPT-01:ID {self.visit_id}')
                             return False
                     except:
                         self.logger.error('Failed to put visit ID to epics, the processing pypline will not work')
-                        self.logger.error('To fix this open a terminal window on another workstation and run the command: caput BL21B-EA-EXPT-01:ID '+self.visit_id)
+                        self.logger.error(f'To fix this open a terminal window on another workstation and run the command: caput BL21B-EA-EXPT-01:ID {self.visit_id}')
                         return False
 
             else:
                 self.logger.error('Current user has no permissions on this visit')
                 return False
         else:
-            self.logger.error(str(visit)+' was not found in the filesystem')
+            self.logger.error(f'{visit} was not found in the filesystem')
             return False
 
     def CopyIcons(self):
@@ -124,7 +219,7 @@ class UserSetup(object):
                 copyfile(launcher, self.home_directory+'Desktop/'+os.path.split(launcher)[-1])
                 os.chmod(self.home_directory+'Desktop/'+os.path.split(launcher)[-1], int('755', 8))
             else:
-                self.logger.info(os.path.split(launcher)[-1]+' is already on desktop')  
+                self.logger.info(f'{os.path.split(launcher)[-1]} is already on desktop')  
 
     def CopyScatter(self):
         scatter_in = self.template_dir+'scatterIV.jar'
@@ -220,20 +315,14 @@ class UserSetup(object):
         biosaxs_outfile = self.visit_directory+'xml/default.biosaxs'
         hplc_outfile = self.visit_directory+'xml/default.hplc'
 
-        default_biosaxs = [
-            ('measurement',
-             [('location', [('plate', '2'), ('row', 'A'), ('column', '9')]), ('sampleName', 'my buffer'), ('viscosity', 'medium'), ('buffer', 'true'), ('buffers', ''), ('yellowSample', 'true'), ('timePerFrame', '1.0'), ('frames', '21'), ('exposureTemperature', '15.0'), ('key', ''), ('mode', 'BS'), ('delay', '0.0'), ('move', 'true'), ('sampleVolume', '35'), ('visit', self.visit_id), ('username', 'b21user'), ('concentration', '0.0'), ('molecularWeight', '0.0'), ('datafilename', '')]
-             ),
-            ('measurement', [
-                ('location', [('plate', '1'), ('row', 'A'), ('column', '1')]), ('sampleName', 'my sample'), ('viscosity', 'medium'), ('buffer', 'false'), ('buffers', '2a9'), ('yellowSample', 'true'), ('timePerFrame', '1.0'), ('frames', '21'), ('exposureTemperature', '15.0'), ('key', ''), ('mode', 'BS'), ('delay', '0.0'), ('move', 'true'), ('sampleVolume', '35'), ('visit', self.visit_id), ('username', 'b21user'), ('concentration', '0.0'), ('molecularWeight', '0.0'), ('datafilename', '')]
-         )]
-        default_hplc = [('measurement', [('sampleName', 'my sample'), ('concentration', '5.0'), ('molecularWeight', '66.0'), ('timePerFrame', '3.0'), ('visit', self.visit_id), ('username', 'b21user'), ('comment', 'None'), ('buffers', '25 mM Tris pH 7.5, 200 mM NaCl'), ('mode', 'HPLC'), ('columnType', 'KW403'), ('duration', '32.0'), ('delay', '90.0')])]
+        default_biosaxs = [('measurement', [('location', [('plate', '2'), ('row', 'A'), ('column', '9')]), ('sampleName', 'my buffer'), ('concentration', '0.0'), ('viscosity', 'medium'), ('molecularWeight', '0.0'), ('buffer', 'true'), ('buffers', ''), ('yellowSample', 'true'), ('timePerFrame', '1.0'), ('frames', '21'), ('exposureTemperature', '15.0'), ('key', ''), ('mode', 'BS'), ('move', 'true'), ('sampleVolume', '35'), ('visit', self.visit_id), ('username', 'b21user')]), ('measurement', [('location', [('plate', '1'), ('row', 'A'), ('column', '1')]), ('sampleName', 'my sample'), ('concentration', '1.0'), ('viscosity', 'medium'), ('molecularWeight', '66.0'), ('buffer', 'false'), ('buffers', '2a9'), ('yellowSample', 'true'), ('timePerFrame', '1.0'), ('frames', '21'), ('exposureTemperature', '15.0'), ('key', ''), ('mode', 'BS'), ('move', 'true'), ('sampleVolume', '35'), ('visit', self.visit_id), ('username', 'b21user')])]
+        default_hplc = [('measurement', [('location', 'A1'), ('sampleName', 'my sample'), ('concentration', '5.0'), ('molecularWeight', '66.0'), ('timePerFrame', '3.0'), ('visit', self.visit_id), ('username', 'b21user'), ('comment', 'None'), ('buffers', '25 mM Tris pH 7.5, 200 mM NaCl'), ('mode', 'HPLC'), ('columnType', 'KW403'), ('duration', '32.0')])]
         myxml = xmlReadWrite()
         myxml.setOutputType('biosaxs')
-        open(biosaxs_outfile, 'w').write(myxml.parseToXml(default_biosaxs))
+        open(biosaxs_outfile, 'w').write(myxml.parseToXml(default_biosaxs).decode('utf-8'))
         self.logger.info('Wrote default.biosaxs to xml directory')
         myxml.setOutputType('hplc')
-        open(hplc_outfile, 'w').write(myxml.parseToXml(default_hplc))
+        open(hplc_outfile, 'w').write(myxml.parseToXml(default_hplc).decode('utf-8'))
         self.logger.info('Wrote default.hplc to xml directory')        
 
     def WriteProcessingPipeline(self, output_file = None, low_q = None, high_q = None, abs_cal = None):
@@ -277,48 +366,52 @@ class UserSetup(object):
 
         if os.path.isfile(self.pipeline_file) and self.pipeline_file[-4:] == '.nxs':
             copyfile(self.pipeline_file, output_file)
-            self.logger.info('Copied: '+self.pipeline_file+' to: '+output_file)
+            self.logger.info(f'Copied: {self.pipeline_file} to: {output_file}')
             self.logger.info('Parsing pipeline nxs file')
-            mynxs = nx.tree.NXFile(output_file, 'rw')
-            tree = mynxs.readfile()
-            for item in tree.entry.process._entries.iteritems():
-                try:
-                    if item[1].name.nxdata == u'Export to Text File':
-                        mydata = json.loads(item[1].data.nxdata)
+            mynxs = h5py.File(output_file, 'r+')
+            location = '/entry/process/'
+            proc = mynxs[location]
+            #this seems like a strange way to do it but its because
+            #the entries in the nxs file that are named with just an
+            #integer are the processing steps and they are the only
+            #entries we want so we use this method to ignore the other
+            #entries.
+            for i in range(len(proc)):
+                if str(i) in proc:
+                    if proc[f'{i}/name'][()] == 'Export to Text File':
+                        mydata = json.loads(proc[f'{i}/data'][()])
                         mydata['outputDirectoryPath'] = self.visit_directory+'processed'
-                        item[1].data.nxdata = unicode(json.dumps(mydata), 'utf-8')
-                    elif item[1].name.nxdata == u'Import Detector Calibration':
+                        proc[f'{i}/data'][()] = json.dumps(mydata).encode('utf-8')
+                    elif proc[f'{i}/name'][()] == u'Import Detector Calibration':
                         calibration_file = self.WriteCalibrationFile()
                         if calibration_file:
-                            item[1].data.nxdata = unicode(json.dumps({"filePath":calibration_file}), 'utf-8')
-                            self.logger.info('Using detector calibration file: '+json.loads(item[1].data.nxdata)['filePath'])
+                            proc[f'{i}/data'][()] = json.dumps({"filePath":calibration_file}).encode('utf-8')
+                            self.logger.info(f"Using detector calibration file: {json.loads(proc[f'{i}/data'][()])['filePath']}")
                         else:
                             self.logger.error('Unable to set the calibration file in pipeline nxs')
-                    elif item[1].name.nxdata == u'Import Mask From File':
+                    elif proc[f'{i}/name'][()] == u'Import Mask From File':
                         mask_file = self.WriteMaskFile()
                         if mask_file:
-                            item[1].data.nxdata = unicode(json.dumps({"filePath":mask_file}), 'utf-8')
-                            self.logger.info('Using detector mask file: '+json.loads(item[1].data.nxdata)['filePath'])
-                    elif item[1].name.nxdata == u'Azimuthal Integration':
-                        mydata = json.loads(item[1].data.nxdata)
+                            proc[f'{i}/data'][()] = json.dumps({"filePath":mask_file}).encode('utf-8')
+                            self.logger.info(f"Using detector mask file: {json.loads(proc[f'{i}/data'][()])['filePath']}")
+                    elif proc[f'{i}/name'][()] == u'Azimuthal Integration':
+                        mydata = json.loads(proc[f'{i}/data'][()])
                         if low_q == None:
                             low_q = mydata['radialRange'][0]
                         if high_q == None:
                             high_q = mydata['radialRange'][1]
                         mydata['radialRange'] = [low_q, high_q]
-                        item[1].data.nxdata = unicode(json.dumps(mydata), 'utf-8')
-                    elif item[1].name.nxdata == u'Multiply by Scalar':
+                        proc[f'{i}/name'][()] = json.dumps(mydata).encode('utf-8')
+                    elif proc[f'{i}/name'][()] == u'Multiply by Scalar':
                         if not abs_cal == None:
-                            mydata = json.loads(item[1].data.nxdata)
+                            mydata = json.loads(proc[f'{i}/name'][()])
                             mydata['value'] = abs_cal
-                            item[1].data.nxdata = unicode(json.dumps(mydata), 'utf-8')
+                            proc[f'{i}/name'][()] = json.dumps(mydata).encode('utf-8')
                         else:
                             pass
 
                     else:
                         pass
-                except:
-                    pass
             self.output_pipeline_file = output_file
             self.logger.info('Set the output data directory in the pipeline file to: '+self.visit_directory+'processed')
         else:
@@ -384,7 +477,7 @@ class UserSetup(object):
 
         #If you are already b21user you can go ahead directly
         if getpass.getuser() == user:
-            self.logger.info('Making symlink '+target_dir+': pointing to: '+source_dir)
+            self.logger.info(f'Making symlink {target_dir} pointing to: {source_dir}')
             try:
                 if os.path.islink(target_dir):
                     os.unlink(target_dir)
@@ -490,6 +583,131 @@ class UserSetup(object):
                 self.logger.error('Failed to login as b21user after three tries, you will have to make the HPLC link manually')
             client.close()
 
+    def make_pdf_report(self):
+        page_size = ps = A4
+        output_file = self.visit_directory+'processing/beamline_parameters.pdf'
+        self.logger.info(f'Outputting beamline info to {output_file}')
+        c = Canvas(output_file, pagesize=ps)
+        #HEADER
+        c.setStrokeColorRGB(0,0,0)
+        c.setFillColorRGB(0,0.1,0.4)
+        logo_x = ps[0]/6
+        logo_y = logo_x/1.5
+        c.rect(10,ps[1]-logo_y-10,logo_x,logo_y, fill=1)
+
+        c.setFillColorRGB(1,1,1)
+        c.setFont('Helvetica', 48)
+        c.drawString(20,ps[1]-24-logo_y/2, "B21")
+
+        c.setFillColorRGB(0,0.1,0.4)
+        c.setFont('Helvetica', 24)
+        c.drawString(20+logo_x,ps[1]-5-(1*24), "AUTOMATED")
+        c.drawString(20+logo_x,ps[1]-2.5-(2*24), "BEAMLINE AND USEAGE")
+        c.drawString(20+logo_x,ps[1]-(3*24), "REPORT")
+
+        c.setFont('Helvetica', 14)
+        c.drawString(ps[0]-120,ps[1]-20, datetime.now().strftime('%a %d %b %Y'))
+        c.drawString(ps[0]-120,ps[1]-20-14, self.visit_id)
+
+        c.setStrokeColorRGB(0,0.1,0.4)
+        c.line(0,ps[1]-76,ps[0],ps[1]-76)
+
+        #CALIBRATION STUFF
+        c.drawString(10,ps[1]-100,"CALIBRATION INFORMATION")
+
+        try:
+            with h5py.File(self.calibration_file, "r") as fh:
+                wavelength = round(fh['/entry1/calibration_sample/beam/incident_wavelength'][()],4)
+                energy = round(12.398/fh['/entry1/calibration_sample/beam/incident_wavelength'][()],1)
+                sample_to_dect = round(fh['/entry1/instrument/detector/distance'][()],1)
+                beam_position_x_mm = round(fh['/entry1/instrument/detector/beam_center_x'][()],2)
+                beam_position_y_mm = round(fh['/entry1/instrument/detector/beam_center_y'][()],2)
+                self.logger.debug('Got parameters from calibration file')
+        except:
+            self.logger.error('Failed to get into from calibration file, will use defaults')
+            wavelength = 0.9524
+            energy = 13.0
+            sample_to_dect = 3703.5
+            beam_postion_x_mm = 129.3
+            beam_postion_y_mm = 19.87
+        try:
+            with h5py.File(self.pipeline_file, "r") as fh:
+                location = '/entry/process/'
+                proc = fh[location]
+                for i in range(len(proc)):
+                    if str(i) in proc:
+                        if proc[f'{i}/name'][()] == u'Azimuthal Integration':
+                            mydata = json.loads(proc[f'{i}/data'][()])
+                            q_range = mydata['radialRange']
+            self.logger.debug('Got info from pipeline file')
+        except:
+            self.logger.error('Failed to get info from pipeline file, using defaults')
+            q_range = [0.0045,0.34]
+
+        tabs = (30,200)
+        line_spacing = 15
+        csr = ps[1]-115
+        c.setFont('Helvetica', 12)
+        c.drawString(tabs[0],csr, "Wavelength:")
+        c.drawString(tabs[1],csr, f"{wavelength} \u00C5")
+        csr-=line_spacing
+        c.drawString(tabs[0],csr, "Energy:")
+        c.drawString(tabs[1],csr, f"{energy} keV")
+        csr-=line_spacing
+        c.drawString(tabs[0],csr, "Beam centre X:")
+        c.drawString(tabs[1],csr, f"{beam_position_x_mm} mm")
+        csr-=line_spacing
+        c.drawString(tabs[0],csr, "Beam centre Y:")
+        c.drawString(tabs[1],csr, f"{beam_position_y_mm} mm")
+        csr-=line_spacing
+        c.drawString(tabs[0],csr, "Sample to detector distance:")
+        c.drawString(tabs[1],csr, f"{sample_to_dect} mm")
+        csr-=line_spacing
+        c.drawString(tabs[0],csr, "Detector:")
+        c.drawString(tabs[1],csr, f"EigerX 4M (Dectris)")
+        csr-=line_spacing
+        c.drawString(tabs[0],csr, "Source:")
+        c.drawString(tabs[1],csr, f"bending magnet")
+        csr-=line_spacing
+        c.drawString(tabs[0],csr, "Flux:")
+        c.drawString(tabs[1],csr, f"2x10")
+        c.setFont('Helvetica', 8)
+        c.drawString(tabs[1]+27,csr+5, f"4")
+        c.setFont('Helvetica', 12)
+        c.drawString(tabs[1]+35,csr, f"photons.s")
+        c.setFont('Helvetica', 8)
+        c.drawString(tabs[1]+88,csr+5, f"-1")
+        c.setFont('Helvetica', 12)
+        csr-=line_spacing
+        c.drawString(tabs[0],csr, "Q range:")
+        c.drawString(tabs[1],csr, f"{q_range[0]}-{q_range[1]} \u00C5")
+        c.setFont('Helvetica', 8)
+        c.drawString(tabs[1]+76,csr+5, f"-1")
+        c.setFont('Helvetica', 12)
+        csr-=line_spacing
+        c.drawString(tabs[0],csr, "Q definition:")
+        c.drawString(tabs[1],csr, f"4π*sin(θ)/λ")
+        csr-=line_spacing
+        c.drawString(tabs[0],csr, "Intensity units:")
+        c.drawString(tabs[1],csr, f"cm")
+        c.setFont('Helvetica', 8)
+        c.drawString(tabs[1]+17,csr+5, f"-1")
+        c.setFont('Helvetica', 12)
+        c.drawString(tabs[1]+25,csr, f"(absolute intensity scaled to water scatter at 0.0163)")
+        csr-=line_spacing
+        c.drawString(tabs[0],csr, "Capillary diameter:")
+        c.drawString(tabs[1],csr, "1.5 mm")
+        csr-=line_spacing
+        c.drawString(tabs[0],csr, "Default exposure temperature:")
+        c.drawString(tabs[1],csr, "15 \u00B0C (used unless otherwise specified per sample)")
+        csr-=line_spacing
+        c.drawString(tabs[0],csr, "Beam size at sample:")
+        c.drawString(tabs[1],csr, "1.0 x 0.25 mm")
+        csr-=line_spacing
+        c.drawString(tabs[0],csr, "Beam size at detector (focus):")
+        c.drawString(tabs[1],csr, "0.05 x 0.05 mm (FWHM)")
+        c.save()
+
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         sys.argv.append('-h')
@@ -504,6 +722,7 @@ if __name__ == '__main__':
     optional.add_option("-y", "--year", action="store", type="int", dest="year", default=None, help="Manually set the year to look for the visit folder, default is current year.")
     optional.add_option("-o", "--output_file", action="store", type="string", dest="output_file", default=None, help="The location of the pipeline nxs output file. The default is into current visit processing dir with name processing_pipeline_<todays date>.nxs ")
     optional.add_option("-m", "--mq", action="store_true", dest="activemq", default=False, help="Turn on activeMQ communication, default is False.")
+    optional.add_option("-p", "--pdf", action="store_false", dest="makepdf", default=True, help="Skip output of calibration and beamline info as a pdf file, default is to output the file.")
     optional.add_option("-l", "--hplc_link", action="store", type="string", dest="hplc_link", default="None", help="Set a new location for the HPLC symlink.")
     parser.add_option_group(required)
     parser.add_option_group(optional)
@@ -515,8 +734,8 @@ if __name__ == '__main__':
 
     job = UserSetup()
     if options.year:
-        job.set_visit(options.year)
-    if job.SetVisit(options.visit_id):
+        job.set_year(options.year)
+    if job.setVisit(options.visit_id):
         job.CopyIcons()
         job.CopyScatter()
         job.CopyBSA()
@@ -527,4 +746,6 @@ if __name__ == '__main__':
             job.setHplcSymLinkLocation(options.hplc_link)
         job.MakeHplcSymLink()
         job.WriteDefaultXmlFiles()
+        if options.makepdf:
+            job.make_pdf_report()
         job.logger.info('Finished successfully')
