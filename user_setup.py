@@ -398,15 +398,21 @@ class UserSetup(object):
                         mydata = json.loads(proc[f'{i}/data'][()])
                         if low_q == None:
                             low_q = mydata['radialRange'][0]
+                        else:
+                            self.logger.info(f'Manually setting low Q cutoff to {low_q}')
                         if high_q == None:
                             high_q = mydata['radialRange'][1]
+                        else:
+                            self.logger.info(f'Manually setting high Q cutoff to {high_q}')
+                        self.logger.info(f'low_q = {low_q}, high_q = {high_q}')
                         mydata['radialRange'] = [low_q, high_q]
-                        proc[f'{i}/name'][()] = json.dumps(mydata).encode('utf-8')
+                        proc[f'{i}/data'][()] = json.dumps(mydata).encode('utf-8')
                     elif proc[f'{i}/name'][()] == u'Multiply by Scalar':
                         if not abs_cal == None:
-                            mydata = json.loads(proc[f'{i}/name'][()])
+                            self.logger.info(f'Manually setting absolute calibration to: {abs_cal}')
+                            mydata = json.loads(proc[f'{i}/data'][()])
                             mydata['value'] = abs_cal
-                            proc[f'{i}/name'][()] = json.dumps(mydata).encode('utf-8')
+                            proc[f'{i}/data'][()] = json.dumps(mydata).encode('utf-8')
                         else:
                             pass
 
